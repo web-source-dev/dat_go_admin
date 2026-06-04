@@ -1,0 +1,219 @@
+export interface UserPermissions {
+  dataSessionId?: string | { _id: string; name: string; proxy: string };
+  dashboard: boolean;
+  searchTrucks: boolean;
+  privateLoads: boolean;
+  myLoads: boolean;
+  privateNetwork: boolean;
+  myTrucks: boolean;
+  liveSupport: boolean;
+  tools: boolean;
+  sendFeedback: boolean;
+  notifications: boolean;
+  profile: boolean;
+  sidebarDat: boolean;
+  searchLoadsLaneRate: boolean;
+  searchLoadsViewRoute: boolean;
+  searchLoadsRateview: boolean;
+  searchLoadsViewDirectory: boolean;
+  // DAT Multitab Permissions (Phase 1)
+  datMultitab: boolean;
+  datMultitabNumbers: number;
+  // Web Multitab Permissions (Phase 2)
+  webMultitab: boolean;
+  webMultitabNumbers: number;
+  domain: string;
+  domains: string[];
+  // Platform Access Permissions
+  desktop: boolean;
+  mobile: boolean;
+  extension: boolean;
+}
+
+export interface User {
+  _id: string;
+  name: string;
+  email: string;
+  role: 'user'; // Admin users are never shown in UI or created via API
+  isBanned: boolean;
+  isOnline: string | null;
+  createdAt: string;
+  permissions?: UserPermissions;
+  monthlyPaymentAmount?: number;
+  billingDate?: number;
+  referralCode?: string;
+  referredBy?: string;
+  referralUsedAt?: string;
+  plan?: 'single' | 'double' | 'multi';
+  label?: string;
+  anydeskid?: string;
+  phone?: string;
+  note?: string;
+  // Trial account fields
+  isTrial?: boolean;
+  trialStartDate?: string;
+  trialEndDate?: string;
+  trialDurationHours?: number;
+}
+
+export interface DATSession {
+  _id: string;
+  name: string;
+  proxy: string;
+  isLoggedIn: boolean;
+  userCounts: number;
+  fileName: string | null;
+  label?: 'new' | 'single' | 'double' | 'multi';
+}
+
+export interface Session {
+  _id: string;
+  name: string;
+  proxy: string;
+  isLoggedIn: boolean;
+  userCounts: number;
+  fileName: string;
+  createdAt: string;
+  label?: 'new' | 'single' | 'double' | 'multi';
+}
+
+export interface Payment {
+  _id: string;
+  userId: User | string;
+  amount: number;
+  month: number;
+  year: number;
+  status: 'pending' | 'approved' | 'paid';
+  dueDate: string;
+  paymentDate?: string;
+  notes?: string;
+  paymentProofImagePath?: string | null;
+  paymentProofOriginalName?: string | null;
+  paymentProofUploadedAt?: string | null;
+  paymentProofImageUrl?: string | null;
+  createdAt: string;
+  updatedAt: string;
+  period?: string; // Virtual field for display
+  referralDiscount?: number;
+  referralDiscountReason?: string;
+  referralSourceUserId?: string;
+  isRefunded?: boolean;
+  refundDate?: string;
+  refundNotes?: string;
+  referralStatuses?: Array<{
+    name: string;
+    status: 'active' | 'banned' | 'refunded' | 'inactive';
+    reason?: string;
+  }>;
+  // Salesperson commission fields
+  salespersonCommission?: number;
+  salespersonId?: string;
+  salespersonCommissionPaid?: boolean;
+}
+
+export interface PaymentSummary {
+  totalPending: number;
+  totalPaid: number;
+  totalOverdue: number;
+  nextDueDate?: string;
+}
+
+export interface Cookie {
+  _id: string;
+  fileName: string;
+  filePath: string;
+  sessionId?: string;
+  sessionName?: string;
+  label: 'new' | 'single' | 'double' | 'multi';
+  cookieCount: number;
+  hasCookies: boolean;
+  fileSize: number;
+  lastUpdated?: string;
+  extractionDate?: string;
+  sourceZipFile?: string;
+  isActive: boolean;
+  isActiveSwiftSolutions?: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PlatformPermissions {
+  desktop: boolean;
+  mobile: boolean;
+  extension: boolean;
+}
+
+export interface Message {
+  _id: string;
+  title: string;
+  message: string;
+  platform: 'all' | 'desktop' | 'mobile' | 'extension';
+  sessionId?: string | { _id: string; name: string; proxy: string };
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SalespersonCommissionPayment {
+  _id: string;
+  salespersonId: User | string;
+  amount: number;
+  month: number;
+  year: number;
+  paymentDate: string;
+  notes?: string;
+  coveredCommissionIds?: string[];
+  createdBy: User | string;
+  createdAt: string;
+  updatedAt: string;
+  period?: string; // Virtual field for display
+}
+
+export interface SalespersonCommissionSummary {
+  salesperson: {
+    _id: string;
+    name: string;
+    email: string;
+  };
+  summary: {
+    totalEarned: number;
+    totalPaid: number;
+    totalOutstanding: number;
+  };
+  monthlySummary: Array<{
+    year: number;
+    month: number;
+    totalEarned: number;
+    paidAmount: number;
+    unpaidAmount: number;
+    manualPayments: Array<{
+      _id: string;
+      amount: number;
+      paymentDate: string;
+      notes?: string;
+      createdBy: string;
+      coveredCommissionIds?: string[];
+    }>;
+    netUnpaid: number;
+    payments: Array<{
+      paymentId: string;
+      amount: number;
+      commission: number;
+      commissionPaid: boolean;
+      paymentDate: string;
+    }>;
+  }>;
+  recentPayments: SalespersonCommissionPayment[];
+}
+
+export interface SalespersonWithCommission {
+  _id: string;
+  name: string;
+  email: string;
+  createdAt: string;
+  totalEarned: number;
+  totalPaid: number;
+  outstanding: number;
+  userCount: number;
+  lastPayment: string | null;
+}
