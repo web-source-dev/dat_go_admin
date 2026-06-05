@@ -215,12 +215,18 @@ export const cookiesApi = {
     return response.data;
   },
 
-  activate: async (id: string, channel: 'dathub' | 'swiftSolutions' = 'dathub') => {
+  activate: async (
+    id: string,
+    channel: 'single' | 'double' | 'multi' | 'swiftSolutions' | 'dathub' = 'single'
+  ) => {
     const response = await api.post(`/cookie/${id}/activate`, { channel });
     return response.data;
   },
 
-  deactivate: async (id: string, channel: 'dathub' | 'swiftSolutions' = 'dathub') => {
+  deactivate: async (
+    id: string,
+    channel: 'single' | 'double' | 'multi' | 'swiftSolutions' | 'dathub' = 'single'
+  ) => {
     const response = await api.post(`/cookie/${id}/deactivate`, { channel });
     return response.data;
   },

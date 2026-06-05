@@ -132,6 +132,9 @@ export interface Cookie {
   extractionDate?: string;
   sourceZipFile?: string;
   isActive: boolean;
+  isActiveSingle?: boolean;
+  isActiveDouble?: boolean;
+  isActiveMulti?: boolean;
   isActiveSwiftSolutions?: boolean;
   createdAt: string;
   updatedAt: string;

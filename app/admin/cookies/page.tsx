@@ -102,7 +102,9 @@ export default function CookiesPage() {
     setCookies(prev => prev.map(cookie => cookie._id === updatedCookie._id ? updatedCookie : cookie));
   };
 
-  const handleActivateCookie = async (cookie: Cookie, channel: 'dathub' | 'swiftSolutions') => {
+  type CookieChannel = 'single' | 'double' | 'multi' | 'swiftSolutions';
+
+  const handleActivateCookie = async (cookie: Cookie, channel: CookieChannel) => {
     try {
       await cookiesApi.activate(cookie._id, channel);
       await fetchCookies();
@@ -112,7 +114,7 @@ export default function CookiesPage() {
     }
   };
 
-  const handleDeactivateCookie = async (cookie: Cookie, channel: 'dathub' | 'swiftSolutions') => {
+  const handleDeactivateCookie = async (cookie: Cookie, channel: CookieChannel) => {
     try {
       await cookiesApi.deactivate(cookie._id, channel);
       await fetchCookies();
@@ -322,10 +324,16 @@ export default function CookiesPage() {
                       Last Updated
                     </th>
                     <th className="px-6 py-3 text-left text-sm font-semibold text-muted-foreground">
-                      DAT Go
+                      Single
                     </th>
                     <th className="px-6 py-3 text-left text-sm font-semibold text-muted-foreground">
-                      Swift Solutions
+                      Double
+                    </th>
+                    <th className="px-6 py-3 text-left text-sm font-semibold text-muted-foreground">
+                      Multi
+                    </th>
+                    <th className="px-6 py-3 text-left text-sm font-semibold text-muted-foreground">
+                      Swift
                     </th>
                     <th className="px-6 py-3 text-right text-sm font-semibold text-muted-foreground">
                       Actions
@@ -369,7 +377,33 @@ export default function CookiesPage() {
                         {cookie.lastUpdated ? formatDate(cookie.lastUpdated) : '-'}
                       </td>
                       <td className="px-6 py-4">
-                        {cookie.isActive ? (
+                        {cookie.isActiveSingle ? (
+                          <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-green-500/10 text-green-600 border border-green-500/30">
+                            <CheckCircle2 size={14} className="mr-1" />
+                            Active
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-gray-500/10 text-gray-600 border border-gray-500/30">
+                            <Circle size={14} className="mr-1" />
+                            Inactive
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-6 py-4">
+                        {cookie.isActiveDouble ? (
+                          <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-green-500/10 text-green-600 border border-green-500/30">
+                            <CheckCircle2 size={14} className="mr-1" />
+                            Active
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-gray-500/10 text-gray-600 border border-gray-500/30">
+                            <Circle size={14} className="mr-1" />
+                            Inactive
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-6 py-4">
+                        {cookie.isActiveMulti ? (
                           <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-green-500/10 text-green-600 border border-green-500/30">
                             <CheckCircle2 size={14} className="mr-1" />
                             Active
@@ -402,22 +436,56 @@ export default function CookiesPage() {
                                 <MoreVertical size={18} className="text-muted-foreground" />
                               </button>
                             </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" className="w-64 bg-card border-border">
-                              {!cookie.isActive ? (
+                            <DropdownMenuContent align="end" className="w-72 bg-card border-border">
+                              {!cookie.isActiveSingle ? (
                                 <DropdownMenuItem
-                                  onClick={() => handleActivateCookie(cookie, 'dathub')}
+                                  onClick={() => handleActivateCookie(cookie, 'single')}
                                   className="cursor-pointer text-foreground hover:bg-muted"
                                 >
                                   <CheckCircle2 size={16} className="mr-2" />
-                                  Enable for DAT Go
+                                  Enable for Single plan
                                 </DropdownMenuItem>
                               ) : (
                                 <DropdownMenuItem
-                                  onClick={() => handleDeactivateCookie(cookie, 'dathub')}
+                                  onClick={() => handleDeactivateCookie(cookie, 'single')}
                                   className="cursor-pointer text-foreground hover:bg-muted"
                                 >
                                   <Circle size={16} className="mr-2" />
-                                  Disable for DAT Go
+                                  Disable for Single plan
+                                </DropdownMenuItem>
+                              )}
+                              {!cookie.isActiveDouble ? (
+                                <DropdownMenuItem
+                                  onClick={() => handleActivateCookie(cookie, 'double')}
+                                  className="cursor-pointer text-foreground hover:bg-muted"
+                                >
+                                  <CheckCircle2 size={16} className="mr-2" />
+                                  Enable for Double plan
+                                </DropdownMenuItem>
+                              ) : (
+                                <DropdownMenuItem
+                                  onClick={() => handleDeactivateCookie(cookie, 'double')}
+                                  className="cursor-pointer text-foreground hover:bg-muted"
+                                >
+                                  <Circle size={16} className="mr-2" />
+                                  Disable for Double plan
+                                </DropdownMenuItem>
+                              )}
+                              {!cookie.isActiveMulti ? (
+                                <DropdownMenuItem
+                                  onClick={() => handleActivateCookie(cookie, 'multi')}
+                                  className="cursor-pointer text-foreground hover:bg-muted"
+                                >
+                                  <CheckCircle2 size={16} className="mr-2" />
+                                  Enable for Multi plan
+                                </DropdownMenuItem>
+                              ) : (
+                                <DropdownMenuItem
+                                  onClick={() => handleDeactivateCookie(cookie, 'multi')}
+                                  className="cursor-pointer text-foreground hover:bg-muted"
+                                >
+                                  <Circle size={16} className="mr-2" />
+                                  Disable for Multi plan
                                 </DropdownMenuItem>
                               )}
                               {!cookie.isActiveSwiftSolutions ? (
