@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import {
+  AlertTriangle,
   ArrowDown,
   ArrowUp,
   CheckCircle2,
@@ -26,14 +27,29 @@ export default function SwiftPartnerAccountsPage() {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [staleRemoved, setStaleRemoved] = useState<PartnerSwiftDashboardConfig['staleRemoved']>([]);
+
+  const applyConfig = (data: PartnerSwiftDashboardConfig, notifyPrune = false) => {
+    setConfig(data);
+    setManualEnabled(Boolean(data.manualSelectionEnabled));
+    setSelectedIds(data.selectedCookieIds || []);
+    setStaleRemoved(data.staleRemoved || []);
+
+    if (notifyPrune && data.selectionPruned && (data.staleRemoved?.length ?? 0) > 0) {
+      const count = data.staleRemoved!.length;
+      toast.warning(
+        `Removed ${count} stale account${count === 1 ? '' : 's'} from selection (deleted or empty after sync).`
+      );
+    } else if (notifyPrune && data.message && data.selectionPruned) {
+      toast.warning(data.message);
+    }
+  };
 
   const loadConfig = useCallback(async () => {
     setLoading(true);
     try {
       const data = await cookiesApi.getPartnerSwiftDashboardConfig();
-      setConfig(data);
-      setManualEnabled(Boolean(data.manualSelectionEnabled));
-      setSelectedIds(data.selectedCookieIds || []);
+      applyConfig(data, true);
     } catch (err: any) {
       toast.error(
         err.response?.data?.message || err.message || 'Failed to load Swift partner config'
@@ -51,6 +67,11 @@ export default function SwiftPartnerAccountsPage() {
   const cookieById = new Map(
     (config?.availableCookies || []).map((c) => [c._id, c])
   );
+  const resolvedSelected = selectedIds
+    .map((id) => cookieById.get(id))
+    .filter((c): c is PartnerSwiftCookieOption => Boolean(c));
+  const missingSelectedIds = selectedIds.filter((id) => !cookieById.has(id));
+  const validSelectedCount = resolvedSelected.length;
 
   const toggleCookie = (id: string) => {
     setSelectedIds((prev) => {
@@ -92,9 +113,7 @@ export default function SwiftPartnerAccountsPage() {
           selectedIds.length > 0 ? true : manualEnabled,
         selectedCookieIds: selectedIds,
       });
-      setConfig(data);
-      setManualEnabled(Boolean(data.manualSelectionEnabled));
-      setSelectedIds(data.selectedCookieIds || []);
+      applyConfig(data);
       toast.success(data.message || 'Swift partner dashboard config saved');
     } catch (err: any) {
       toast.error(
@@ -225,11 +244,48 @@ export default function SwiftPartnerAccountsPage() {
           <Switch checked={manualEnabled} onCheckedChange={setManualEnabled} />
         </div>
 
+        {missingSelectedIds.length > 0 && (
+          <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm">
+            <p className="font-medium text-amber-900 dark:text-amber-100">
+              {missingSelectedIds.length} selected ID{missingSelectedIds.length === 1 ? '' : 's'} not
+              found — click Refresh to clean up, then re-add accounts if needed.
+            </p>
+          </div>
+        )}
+
+        {staleRemoved && staleRemoved.length > 0 && (
+          <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm flex gap-3">
+            <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
+            <div>
+              <p className="font-medium text-amber-900 dark:text-amber-100">
+                {staleRemoved.length} saved account{staleRemoved.length === 1 ? '' : 's'} no longer exist
+              </p>
+              <p className="text-muted-foreground mt-1">
+                These were removed from the database during sync or lost cookie data. They were
+                cleaned from your selection automatically. Add replacements from the list on the
+                right, then Save.
+              </p>
+              <ul className="mt-2 text-xs text-muted-foreground space-y-1">
+                {staleRemoved.map((entry) => (
+                  <li key={entry.id}>
+                    <code className="bg-muted px-1 rounded">{entry.id}</code>
+                    {entry.sessionName || entry.fileName
+                      ? ` — ${entry.sessionName || entry.fileName}`
+                      : ''}
+                    {' '}
+                    ({entry.reason === 'deleted' ? 'deleted' : 'no cookie data'})
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        )}
+
         {config && (
           <div className="rounded-xl bg-muted/40 px-4 py-3 text-sm">
             <span className="font-medium">Partner preview: </span>
             {manualEnabled
-              ? `${selectedIds.length} of ${slotLimit} slots selected`
+              ? `${validSelectedCount} of ${slotLimit} slots active`
               : `${config.previewAccountCount} account(s) in automatic mode`}
             {config.previewAccounts.length > 0 && (
               <span className="text-muted-foreground">
@@ -249,20 +305,16 @@ export default function SwiftPartnerAccountsPage() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <section className="space-y-3">
             <h2 className="text-lg font-semibold">
-              Selected for dashboard ({selectedIds.length}/{slotLimit})
+              Selected for dashboard ({validSelectedCount}/{slotLimit})
             </h2>
-            {selectedIds.length === 0 ? (
+            {validSelectedCount === 0 ? (
               <p className="text-sm text-muted-foreground rounded-xl border border-dashed px-4 py-8 text-center">
                 {manualEnabled
                   ? 'No accounts selected. The partner dashboard will be empty until you pick accounts.'
                   : 'Enable manual selection to choose accounts. In automatic mode, accounts are picked by server rules.'}
               </p>
             ) : (
-              selectedIds.map((id, index) => {
-                const cookie = cookieById.get(id);
-                if (!cookie) return null;
-                return renderCookieRow(cookie, index);
-              })
+              resolvedSelected.map((cookie, index) => renderCookieRow(cookie, index))
             )}
           </section>
 

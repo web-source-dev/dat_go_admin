@@ -9,6 +9,7 @@ import { Separator } from '@/components/ui/separator';
 import { toast } from 'sonner';
 
 interface SchedulerStatus {
+  autoEnabled?: boolean;
   isRunning: boolean;
   isScheduled: boolean;
   nextRun: string | null;
@@ -132,7 +133,21 @@ export default function SchedulerPage() {
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex items-center justify-between">
-            <span className="text-sm font-medium">Status:</span>
+            <span className="text-sm font-medium">Auto scheduler (cron):</span>
+            <Badge variant={status?.autoEnabled ? 'default' : 'secondary'}>
+              {status?.autoEnabled ? 'Enabled' : 'Paused'}
+            </Badge>
+          </div>
+
+          {!status?.autoEnabled && (
+            <p className="text-sm text-muted-foreground rounded-lg bg-muted/50 px-3 py-2">
+              Set <code className="text-xs bg-muted px-1 rounded">SCHEDULER_AUTO_ENABLED=true</code> on the
+              server and restart to resume daily runs. Manual triggers below still work.
+            </p>
+          )}
+
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-medium">Cron jobs registered:</span>
             <Badge variant={status?.isScheduled ? 'default' : 'secondary'}>
               {status?.isScheduled ? 'Active' : 'Inactive'}
             </Badge>

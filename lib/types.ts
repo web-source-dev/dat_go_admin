@@ -155,10 +155,21 @@ export interface PartnerSwiftPreviewAccount {
   ready: boolean;
 }
 
+export interface PartnerSwiftStaleEntry {
+  id: string;
+  reason: 'deleted' | 'no_cookies';
+  sessionName?: string | null;
+  fileName?: string;
+}
+
 export interface PartnerSwiftDashboardConfig {
   manualSelectionEnabled: boolean;
   selectedCookieIds: string[];
   selectedAccounts: PartnerSwiftCookieOption[];
+  validSelectedCount?: number;
+  staleSelectedCount?: number;
+  staleRemoved?: PartnerSwiftStaleEntry[];
+  selectionPruned?: boolean;
   slotLimit: number;
   availableCookies: PartnerSwiftCookieOption[];
   previewAccountCount: number;
