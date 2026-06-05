@@ -4,7 +4,7 @@ import React, { useEffect } from "react"
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Users, Lock, Settings, LogOut, Cookie, MessageSquare, Clock, Users as UsersIcon } from 'lucide-react';
+import { Users, Lock, Settings, LogOut, Cookie, MessageSquare, Clock, Users as UsersIcon, LayoutGrid } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
 import { Toaster } from '@/components/ui/sonner';
 
@@ -12,6 +12,7 @@ const navigation = [
   { name: 'Users', href: '/admin/users', icon: Users },
   { name: 'Sessions', href: '/admin/sessions', icon: Settings },
   { name: 'Cookies', href: '/admin/cookies', icon: Cookie },
+  { name: 'Swift Partner', href: '/admin/swift-partner-accounts', icon: LayoutGrid },
   { name: 'Messages', href: '/admin/messages', icon: MessageSquare },
   { name: 'Salesperson', href: '/admin/salesperson-commission', icon: Users },
   { name: 'Scheduler', href: '/admin/scheduler', icon: Clock },

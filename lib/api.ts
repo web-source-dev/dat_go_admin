@@ -225,6 +225,19 @@ export const cookiesApi = {
     return response.data;
   },
 
+  getPartnerSwiftDashboardConfig: async () => {
+    const response = await api.get('/cookie/partner-swift/dashboard-config');
+    return response.data;
+  },
+
+  updatePartnerSwiftDashboardConfig: async (payload: {
+    manualSelectionEnabled?: boolean;
+    selectedCookieIds?: string[];
+  }) => {
+    const response = await api.put('/cookie/partner-swift/dashboard-config', payload);
+    return response.data;
+  },
+
 };
 
 // Messages API

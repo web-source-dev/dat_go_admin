@@ -137,6 +137,35 @@ export interface Cookie {
   updatedAt: string;
 }
 
+export interface PartnerSwiftCookieOption {
+  _id: string;
+  fileName: string;
+  sessionName: string | null;
+  sessionId: string | null;
+  label: 'new' | 'single' | 'double' | 'multi';
+  hasCookies: boolean;
+  ready: boolean;
+  isActiveSwiftSolutions: boolean;
+}
+
+export interface PartnerSwiftPreviewAccount {
+  slot: number;
+  displayName: string;
+  isActive: boolean;
+  ready: boolean;
+}
+
+export interface PartnerSwiftDashboardConfig {
+  manualSelectionEnabled: boolean;
+  selectedCookieIds: string[];
+  selectedAccounts: PartnerSwiftCookieOption[];
+  slotLimit: number;
+  availableCookies: PartnerSwiftCookieOption[];
+  previewAccountCount: number;
+  previewAccounts: PartnerSwiftPreviewAccount[];
+  message?: string;
+}
+
 export interface PlatformPermissions {
   desktop: boolean;
   mobile: boolean;
