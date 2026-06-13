@@ -378,4 +378,39 @@ export const salespersonCommissionApi = {
   },
 };
 
+export const freightdeskApi = {
+  getStatus: async () => {
+    const response = await api.get('/freightdesk/status');
+    return response.data;
+  },
+
+  getSessions: async () => {
+    const response = await api.get('/freightdesk/sessions');
+    return response.data;
+  },
+
+  importContainer: async (
+    container: string,
+    options?: { activate?: boolean; channel?: 'single' | 'double' | 'multi' | 'swiftSolutions' | 'dathub' }
+  ) => {
+    const response = await api.post(`/freightdesk/import/${encodeURIComponent(container)}`, options || {});
+    return response.data;
+  },
+
+  importAll: async (
+    options?: { activate?: boolean; channel?: 'single' | 'double' | 'multi' | 'swiftSolutions' | 'dathub' }
+  ) => {
+    const response = await api.post('/freightdesk/import-all', options || {});
+    return response.data;
+  },
+
+  activate: async (
+    container: string,
+    channel: 'single' | 'double' | 'multi' | 'swiftSolutions' | 'dathub' = 'single'
+  ) => {
+    const response = await api.post(`/freightdesk/activate/${encodeURIComponent(container)}`, { channel });
+    return response.data;
+  },
+};
+
 export default api;

@@ -140,6 +140,25 @@ export interface Cookie {
   updatedAt: string;
 }
 
+export interface FreightdeskContainerSession {
+  container: string;
+  cookieCount: number;
+  lastUpdated?: string | null;
+  imported: boolean;
+  cookieId?: string | null;
+  fileName: string;
+  isActiveSingle?: boolean;
+  isActiveDouble?: boolean;
+  isActiveMulti?: boolean;
+  isActiveSwiftSolutions?: boolean;
+  isActive?: boolean;
+}
+
+export interface FreightdeskStatus {
+  configured: boolean;
+  apiUrl: string;
+}
+
 export interface PartnerSwiftCookieOption {
   _id: string;
   fileName: string;
