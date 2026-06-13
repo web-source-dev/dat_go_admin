@@ -147,6 +147,7 @@ export interface FreightdeskContainerSession {
   imported: boolean;
   cookieId?: string | null;
   fileName: string;
+  label?: 'new' | 'single' | 'double' | 'multi' | null;
   isActiveSingle?: boolean;
   isActiveDouble?: boolean;
   isActiveMulti?: boolean;

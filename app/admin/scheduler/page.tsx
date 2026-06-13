@@ -62,6 +62,9 @@ export default function SchedulerPage() {
         case 'backup':
           response = await schedulerApi.triggerBackup();
           break;
+        case 'freightdesk':
+          response = await schedulerApi.triggerFreightdesk();
+          break;
         default:
           throw new Error('Unknown action');
       }
@@ -85,6 +88,8 @@ export default function SchedulerPage() {
       if (response.data) {
         if (response.data.created !== undefined) {
           toast.info(`Sessions: ${response.data.created} created, ${response.data.updated} updated, ${response.data.deleted} deleted`);
+        } else if (response.data.imported !== undefined && action === 'freightdesk') {
+          toast.info(`FreightDesk: ${response.data.imported} imported, ${response.data.failed || 0} failed`);
         } else if (response.data.checked !== undefined) {
           toast.info(`Payments: ${response.data.checked} checked, ${response.data.banned} users banned`);
         } else if (response.data.updated !== undefined && action !== 'backup') {
@@ -291,7 +296,7 @@ export default function SchedulerPage() {
               Full Sync
             </CardTitle>
             <CardDescription>
-              Complete sync: sessions + downloads (recommended for manual runs)
+              Complete sync: sessions + downloads + FreightDesk containers
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -310,6 +315,28 @@ export default function SchedulerPage() {
                   Trigger Full Sync
                 </>
               )}
+            </Button>
+          </CardContent>
+        </Card>
+
+        {/* FreightDesk Containers */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              FreightDesk Containers
+            </CardTitle>
+            <CardDescription>
+              Import all FD container sessions into cookie files (labels preserved on re-import)
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button
+              onClick={() => handleAction('freightdesk', 'FreightDesk Import')}
+              disabled={actionLoading === 'freightdesk'}
+              className="w-full"
+              variant="outline"
+            >
+              {actionLoading === 'freightdesk' ? 'Importing FD Containers...' : 'Import FD Containers'}
             </Button>
           </CardContent>
         </Card>

@@ -102,6 +102,16 @@ export default function CookiesPage() {
     setCookies(prev => prev.map(cookie => cookie._id === updatedCookie._id ? updatedCookie : cookie));
   };
 
+  const handleQuickLabelChange = async (cookie: Cookie, label: 'new' | 'single' | 'double' | 'multi') => {
+    try {
+      const updated = await cookiesApi.update(cookie._id, { label });
+      handleCookieUpdated(updated);
+      setError(null);
+    } catch (err: any) {
+      setError(err.response?.data?.message || err.message || 'Failed to update label');
+    }
+  };
+
   type CookieChannel = 'single' | 'double' | 'multi' | 'swiftSolutions';
 
   const handleActivateCookie = async (cookie: Cookie, channel: CookieChannel) => {
@@ -171,21 +181,6 @@ export default function CookiesPage() {
       });
     } catch {
       return dateString;
-    }
-  };
-
-  const getLabelColor = (label: string) => {
-    switch (label) {
-      case 'new':
-        return 'bg-yellow-500/10 text-yellow-600';
-      case 'single':
-        return 'bg-blue-500/10 text-blue-600';
-      case 'double':
-        return 'bg-green-500/10 text-green-600';
-      case 'multi':
-        return 'bg-purple-500/10 text-purple-600';
-      default:
-        return 'bg-primary/10 text-primary';
     }
   };
 
@@ -356,9 +351,22 @@ export default function CookiesPage() {
                         {cookie.sessionName || cookie.sessionId || '-'}
                       </td>
                       <td className="px-6 py-4">
-                        <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium capitalize ${getLabelColor(cookie.label)}`}>
-                          {cookie.label}
-                        </span>
+                        <Select
+                          value={cookie.label}
+                          onValueChange={(value: 'new' | 'single' | 'double' | 'multi') =>
+                            handleQuickLabelChange(cookie, value)
+                          }
+                        >
+                          <SelectTrigger className="h-8 w-[110px] bg-background border-border">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="new">New</SelectItem>
+                            <SelectItem value="single">Single</SelectItem>
+                            <SelectItem value="double">Double</SelectItem>
+                            <SelectItem value="multi">Multi</SelectItem>
+                          </SelectContent>
+                        </Select>
                       </td>
                       <td className="px-6 py-4 text-sm text-foreground">
                         {cookie.hasCookies ? (

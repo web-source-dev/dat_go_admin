@@ -8,6 +8,7 @@ import {
   Circle,
   Download,
   RefreshCw,
+  Tag,
   Upload,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -22,6 +23,14 @@ import { freightdeskApi } from '@/lib/api';
 import { FreightdeskContainerSession, FreightdeskStatus } from '@/lib/types';
 
 type CookieChannel = 'single' | 'double' | 'multi' | 'swiftSolutions' | 'dathub';
+type CookieLabel = 'new' | 'single' | 'double' | 'multi';
+
+const LABEL_OPTIONS: { value: CookieLabel; label: string }[] = [
+  { value: 'new', label: 'New' },
+  { value: 'single', label: 'Single' },
+  { value: 'double', label: 'Double' },
+  { value: 'multi', label: 'Multi' },
+];
 
 export default function FreightdeskSessionsPage() {
   const [sessions, setSessions] = useState<FreightdeskContainerSession[]>([]);
@@ -102,6 +111,21 @@ export default function FreightdeskSessionsPage() {
     }
   };
 
+  const handleLabelChange = async (container: string, label: CookieLabel) => {
+    setWorking(`${container}-label`);
+    try {
+      await freightdeskApi.updateLabel(container, label);
+      setSessions((prev) =>
+        prev.map((s) => (s.container === container ? { ...s, label } : s))
+      );
+      setError(null);
+    } catch (err: any) {
+      setError(err.response?.data?.message || err.message || `Failed to update label for ${container}`);
+    } finally {
+      setWorking(null);
+    }
+  };
+
   const handleImportAll = async (activate = false) => {
     setWorking('import-all');
     try {
@@ -136,7 +160,7 @@ export default function FreightdeskSessionsPage() {
               FreightDesk Containers
             </h1>
             <p className="text-sm text-muted-foreground mt-1">
-              Import session cookies from FreightDesk API and activate them for DAT GO channels
+              Import cookies from FreightDesk, set labels, and activate per channel. Labels sync with FreightDesk admin and are preserved on re-import.
             </p>
             {status && (
               <p className="text-xs text-muted-foreground mt-2">
@@ -161,18 +185,11 @@ export default function FreightdeskSessionsPage() {
               <RefreshCw size={18} className="mr-2" />
               Refresh
             </Button>
-            <Button
-              variant="outline"
-              onClick={() => handleImportAll(false)}
-              disabled={working !== null}
-            >
+            <Button variant="outline" onClick={() => handleImportAll(false)} disabled={working !== null}>
               <Download size={18} className="mr-2" />
               Import All
             </Button>
-            <Button
-              onClick={() => handleImportAll(true)}
-              disabled={working !== null}
-            >
+            <Button onClick={() => handleImportAll(true)} disabled={working !== null}>
               <Upload size={18} className="mr-2" />
               Import & Activate Last
             </Button>
@@ -199,11 +216,12 @@ export default function FreightdeskSessionsPage() {
             sessions.map((session) => {
               const active = isActiveForChannel(session);
               const busy = working?.startsWith(session.container);
+              const currentLabel = session.label || 'new';
 
               return (
                 <div
                   key={session.container}
-                  className="rounded-lg border border-border bg-card p-5 shadow-sm"
+                  className="rounded-lg border border-border bg-card p-5 shadow-sm flex flex-col"
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div>
@@ -219,24 +237,43 @@ export default function FreightdeskSessionsPage() {
                     )}
                   </div>
 
-                  <div className="mt-4 space-y-2 text-sm text-muted-foreground">
-                    <div>
+                  <div className="mt-4 space-y-3 text-sm">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-muted-foreground flex items-center gap-1">
+                        <Tag size={14} /> Label
+                      </span>
+                      <Select
+                        value={currentLabel}
+                        onValueChange={(value: CookieLabel) =>
+                          handleLabelChange(session.container, value)
+                        }
+                        disabled={busy || working !== null}
+                      >
+                        <SelectTrigger className="h-8 w-[120px] bg-background">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {LABEL_OPTIONS.map((opt) => (
+                            <SelectItem key={opt.value} value={opt.value}>
+                              {opt.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="text-muted-foreground">
                       Updated: <span className="text-foreground">{formatDate(session.lastUpdated)}</span>
                     </div>
-                    <div>
+                    <div className="text-muted-foreground">
                       Imported:{' '}
                       <span className={session.imported ? 'text-green-600' : 'text-foreground'}>
                         {session.imported ? 'Yes' : 'No'}
                       </span>
                     </div>
-                    {session.imported && (
-                      <div className="truncate" title={session.fileName}>
-                        File: <span className="text-foreground">{session.fileName}</span>
-                      </div>
-                    )}
                   </div>
 
-                  <div className="mt-5 flex flex-col gap-2">
+                  <div className="mt-auto pt-5 flex flex-col gap-2">
                     <Button
                       variant="outline"
                       size="sm"

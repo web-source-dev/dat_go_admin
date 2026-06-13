@@ -336,6 +336,11 @@ export const schedulerApi = {
     const response = await api.post('/scheduler/trigger/backup');
     return response.data;
   },
+
+  triggerFreightdesk: async () => {
+    const response = await api.post('/scheduler/trigger/freightdesk');
+    return response.data;
+  },
 };
 
 // Salesperson Commission API
@@ -409,6 +414,11 @@ export const freightdeskApi = {
     channel: 'single' | 'double' | 'multi' | 'swiftSolutions' | 'dathub' = 'single'
   ) => {
     const response = await api.post(`/freightdesk/activate/${encodeURIComponent(container)}`, { channel });
+    return response.data;
+  },
+
+  updateLabel: async (container: string, label: 'new' | 'single' | 'double' | 'multi') => {
+    const response = await api.patch(`/freightdesk/label/${encodeURIComponent(container)}`, { label });
     return response.data;
   },
 };
