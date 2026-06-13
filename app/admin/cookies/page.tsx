@@ -28,6 +28,9 @@ import { useDebounce } from '@/hooks/use-debounce';
 import { AddCookieDialog } from '@/components/admin/add-cookie-dialog';
 import { EditCookieDialog } from '@/components/admin/edit-cookie-dialog';
 import { Cookie } from '@/lib/types';
+import { COOKIE_LABEL_OPTIONS, CookieLabel, isAssignableCookieLabel } from '@/lib/cookieLabels';
+
+type LabelFilter = 'all' | CookieLabel;
 
 export default function CookiesPage() {
   const [cookies, setCookies] = useState<Cookie[]>([]);
@@ -40,7 +43,7 @@ export default function CookiesPage() {
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [selectedCookie, setSelectedCookie] = useState<Cookie | null>(null);
-  const [labelFilter, setLabelFilter] = useState<'all' | 'new' | 'single' | 'double' | 'multi'>('all');
+  const [labelFilter, setLabelFilter] = useState<LabelFilter>('all');
   const [syncing, setSyncing] = useState(false);
   const searchParams = useSearchParams();
   const itemsPerPage = 10;
@@ -102,7 +105,8 @@ export default function CookiesPage() {
     setCookies(prev => prev.map(cookie => cookie._id === updatedCookie._id ? updatedCookie : cookie));
   };
 
-  const handleQuickLabelChange = async (cookie: Cookie, label: 'new' | 'single' | 'double' | 'multi') => {
+  const handleQuickLabelChange = async (cookie: Cookie, label: string) => {
+    if (!isAssignableCookieLabel(label)) return;
     try {
       const updated = await cookiesApi.update(cookie._id, { label });
       handleCookieUpdated(updated);
@@ -266,16 +270,18 @@ export default function CookiesPage() {
             {/* Label Filter */}
             <div className="flex flex-col">
               <label className="text-sm font-medium text-foreground mb-1">Label</label>
-              <Select value={labelFilter} onValueChange={(value: 'all' | 'new' | 'single' | 'double' | 'multi') => setLabelFilter(value)}>
+              <Select value={labelFilter} onValueChange={(value: LabelFilter) => setLabelFilter(value)}>
                 <SelectTrigger className="bg-card border-border">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Labels</SelectItem>
-                  <SelectItem value="new">New</SelectItem>
-                  <SelectItem value="single">Single</SelectItem>
-                  <SelectItem value="double">Double</SelectItem>
-                  <SelectItem value="multi">Multi</SelectItem>
+                  {COOKIE_LABEL_OPTIONS.map((opt) => (
+                    <SelectItem key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </SelectItem>
+                  ))}
+                  <SelectItem value="multi">Multi (legacy)</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -353,18 +359,20 @@ export default function CookiesPage() {
                       <td className="px-6 py-4">
                         <Select
                           value={cookie.label}
-                          onValueChange={(value: 'new' | 'single' | 'double' | 'multi') =>
-                            handleQuickLabelChange(cookie, value)
-                          }
+                          onValueChange={(value) => handleQuickLabelChange(cookie, value)}
                         >
-                          <SelectTrigger className="h-8 w-[110px] bg-background border-border">
+                          <SelectTrigger className="h-8 w-[190px] bg-background border-border">
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="new">New</SelectItem>
-                            <SelectItem value="single">Single</SelectItem>
-                            <SelectItem value="double">Double</SelectItem>
-                            <SelectItem value="multi">Multi</SelectItem>
+                            {COOKIE_LABEL_OPTIONS.map((opt) => (
+                              <SelectItem key={opt.value} value={opt.value}>
+                                {opt.label}
+                              </SelectItem>
+                            ))}
+                            {cookie.label === 'multi' && (
+                              <SelectItem value="multi">Multi (legacy)</SelectItem>
+                            )}
                           </SelectContent>
                         </Select>
                       </td>

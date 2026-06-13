@@ -1,3 +1,5 @@
+import type { CookieLabel } from './cookieLabels';
+
 export interface UserPermissions {
   dataSessionId?: string | { _id: string; name: string; proxy: string };
   dashboard: boolean;
@@ -63,7 +65,7 @@ export interface DATSession {
   isLoggedIn: boolean;
   userCounts: number;
   fileName: string | null;
-  label?: 'new' | 'single' | 'double' | 'multi';
+  label?: CookieLabel;
 }
 
 export interface Session {
@@ -74,7 +76,7 @@ export interface Session {
   userCounts: number;
   fileName: string;
   createdAt: string;
-  label?: 'new' | 'single' | 'double' | 'multi';
+  label?: CookieLabel;
 }
 
 export interface Payment {
@@ -124,7 +126,7 @@ export interface Cookie {
   filePath: string;
   sessionId?: string;
   sessionName?: string;
-  label: 'new' | 'single' | 'double' | 'multi';
+  label: CookieLabel;
   cookieCount: number;
   hasCookies: boolean;
   fileSize: number;
@@ -147,7 +149,7 @@ export interface FreightdeskContainerSession {
   imported: boolean;
   cookieId?: string | null;
   fileName: string;
-  label?: 'new' | 'single' | 'double' | 'multi' | null;
+  label?: CookieLabel | null;
   isActiveSingle?: boolean;
   isActiveDouble?: boolean;
   isActiveMulti?: boolean;
@@ -165,7 +167,7 @@ export interface PartnerSwiftCookieOption {
   fileName: string;
   sessionName: string | null;
   sessionId: string | null;
-  label: 'new' | 'single' | 'double' | 'multi';
+  label: CookieLabel;
   hasCookies: boolean;
   ready: boolean;
   isActiveSwiftSolutions: boolean;

@@ -1,4 +1,5 @@
 import axios from 'axios';
+import type { AssignableCookieLabel } from './cookieLabels';
 
 export const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:7017';
 
@@ -417,7 +418,7 @@ export const freightdeskApi = {
     return response.data;
   },
 
-  updateLabel: async (container: string, label: 'new' | 'single' | 'double' | 'multi') => {
+  updateLabel: async (container: string, label: AssignableCookieLabel) => {
     const response = await api.patch(`/freightdesk/label/${encodeURIComponent(container)}`, { label });
     return response.data;
   },

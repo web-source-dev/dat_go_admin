@@ -23,6 +23,7 @@ import {
 } from '@/components/ui/select';
 import { Suspense } from 'react';
 import { sessionsApi } from '@/lib/api';
+import { getCookieLabelDisplay, CookieLabel } from '@/lib/cookieLabels';
 import { DataPagination } from '@/components/admin/data-pagination';
 import { useDebounce } from '@/hooks/use-debounce';
 import { AddSessionDialog } from '@/components/admin/add-session-dialog';
@@ -36,7 +37,7 @@ interface Session {
   userCounts: number;
   fileName: string;
   createdAt: string;
-  label?: 'new' | 'single' | 'double' | 'multi';
+  label?: CookieLabel;
 }
 
 export default function SessionsPage() {
@@ -356,7 +357,7 @@ export default function SessionsPage() {
                             ? 'bg-yellow-500/10 text-yellow-600' 
                             : 'bg-primary/10 text-primary'
                         }`}>
-                          {(session as any).label || 'single'}
+                          {getCookieLabelDisplay((session as any).label || 'single')}
                         </span>
                       </td>
                       <td className="px-6 py-4 text-sm text-foreground">

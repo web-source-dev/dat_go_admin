@@ -22,6 +22,7 @@ import {
 import { cookiesApi, sessionsApi } from '@/lib/api';
 import { useToast } from '@/hooks/use-toast';
 import { Cookie, DATSession } from '@/lib/types';
+import { AssignableCookieLabel, COOKIE_LABEL_OPTIONS } from '@/lib/cookieLabels';
 import { Textarea } from '@/components/ui/textarea';
 
 interface AddCookieDialogProps {
@@ -37,7 +38,7 @@ export function AddCookieDialog({ open, onClose, onSuccess, onRefresh }: AddCook
   const [sessionsLoading, setSessionsLoading] = useState(false);
   const [formData, setFormData] = useState({
     fileName: '',
-    label: 'new' as 'new' | 'single' | 'double' | 'multi',
+    label: 'new' as AssignableCookieLabel,
     sessionId: '',
     fileContent: '',
   });
@@ -174,20 +175,21 @@ export function AddCookieDialog({ open, onClose, onSuccess, onRefresh }: AddCook
             <Label htmlFor="label">Label *</Label>
             <Select
               value={formData.label}
-              onValueChange={(value: 'new' | 'single' | 'double' | 'multi') => setFormData({ ...formData, label: value })}
+              onValueChange={(value: AssignableCookieLabel) => setFormData({ ...formData, label: value })}
             >
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="new">New</SelectItem>
-                <SelectItem value="single">Single</SelectItem>
-                <SelectItem value="double">Double</SelectItem>
-                <SelectItem value="multi">Multi</SelectItem>
+                {COOKIE_LABEL_OPTIONS.map((opt) => (
+                  <SelectItem key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
             <p className="text-xs text-muted-foreground">
-              Cookie file label (new/single/double/multi)
+              Cookie file label
             </p>
           </div>
 

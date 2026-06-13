@@ -21,6 +21,7 @@ import {
 } from '@/components/ui/select';
 import { sessionsApi } from '@/lib/api';
 import { useToast } from '@/hooks/use-toast';
+import { AssignableCookieLabel, COOKIE_LABEL_OPTIONS } from '@/lib/cookieLabels';
 
 interface Session {
   _id: string;
@@ -44,7 +45,7 @@ export function AddSessionDialog({ open, onClose, onSuccess, onRefresh }: AddSes
   const [formData, setFormData] = useState({
     name: '',
     proxy: '',
-    label: 'single' as 'new' | 'single' | 'double' | 'multi',
+    label: 'single' as AssignableCookieLabel,
   });
   const { toast } = useToast();
 
@@ -151,20 +152,21 @@ export function AddSessionDialog({ open, onClose, onSuccess, onRefresh }: AddSes
             <Label htmlFor="label">Label *</Label>
             <Select
               value={formData.label}
-              onValueChange={(value: 'new' | 'single' | 'double' | 'multi') => setFormData({ ...formData, label: value })}
+              onValueChange={(value: AssignableCookieLabel) => setFormData({ ...formData, label: value })}
             >
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="new">New</SelectItem>
-                <SelectItem value="single">Single</SelectItem>
-                <SelectItem value="double">Double</SelectItem>
-                <SelectItem value="multi">Multi</SelectItem>
+                {COOKIE_LABEL_OPTIONS.map((opt) => (
+                  <SelectItem key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
             <p className="text-xs text-muted-foreground">
-              Session type label (single/double/multi)
+              Session type label
             </p>
           </div>
 

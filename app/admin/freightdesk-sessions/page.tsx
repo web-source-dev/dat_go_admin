@@ -20,17 +20,10 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { freightdeskApi } from '@/lib/api';
+import { COOKIE_LABEL_OPTIONS, CookieLabel, isAssignableCookieLabel } from '@/lib/cookieLabels';
 import { FreightdeskContainerSession, FreightdeskStatus } from '@/lib/types';
 
 type CookieChannel = 'single' | 'double' | 'multi' | 'swiftSolutions' | 'dathub';
-type CookieLabel = 'new' | 'single' | 'double' | 'multi';
-
-const LABEL_OPTIONS: { value: CookieLabel; label: string }[] = [
-  { value: 'new', label: 'New' },
-  { value: 'single', label: 'Single' },
-  { value: 'double', label: 'Double' },
-  { value: 'multi', label: 'Multi' },
-];
 
 export default function FreightdeskSessionsPage() {
   const [sessions, setSessions] = useState<FreightdeskContainerSession[]>([]);
@@ -111,7 +104,8 @@ export default function FreightdeskSessionsPage() {
     }
   };
 
-  const handleLabelChange = async (container: string, label: CookieLabel) => {
+  const handleLabelChange = async (container: string, label: string) => {
+    if (!isAssignableCookieLabel(label)) return;
     setWorking(`${container}-label`);
     try {
       await freightdeskApi.updateLabel(container, label);
@@ -244,20 +238,21 @@ export default function FreightdeskSessionsPage() {
                       </span>
                       <Select
                         value={currentLabel}
-                        onValueChange={(value: CookieLabel) =>
-                          handleLabelChange(session.container, value)
-                        }
+                        onValueChange={(value) => handleLabelChange(session.container, value)}
                         disabled={busy || working !== null}
                       >
-                        <SelectTrigger className="h-8 w-[120px] bg-background">
+                        <SelectTrigger className="h-8 w-[190px] bg-background">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          {LABEL_OPTIONS.map((opt) => (
+                          {COOKIE_LABEL_OPTIONS.map((opt) => (
                             <SelectItem key={opt.value} value={opt.value}>
                               {opt.label}
                             </SelectItem>
                           ))}
+                          {currentLabel === 'multi' && (
+                            <SelectItem value="multi">Multi (legacy)</SelectItem>
+                          )}
                         </SelectContent>
                       </Select>
                     </div>

@@ -22,6 +22,7 @@ import {
 import { cookiesApi, sessionsApi } from '@/lib/api';
 import { useToast } from '@/hooks/use-toast';
 import { Cookie, DATSession } from '@/lib/types';
+import { AssignableCookieLabel, COOKIE_LABEL_OPTIONS, CookieLabel } from '@/lib/cookieLabels';
 import { Textarea } from '@/components/ui/textarea';
 
 interface EditCookieDialogProps {
@@ -38,7 +39,7 @@ export function EditCookieDialog({ open, onClose, onSuccess, onRefresh, cookie }
   const [sessions, setSessions] = useState<DATSession[]>([]);
   const [sessionsLoading, setSessionsLoading] = useState(false);
   const [formData, setFormData] = useState({
-    label: 'new' as 'new' | 'single' | 'double' | 'multi',
+    label: 'new' as CookieLabel,
     sessionId: '',
     fileContent: '',
   });
@@ -193,20 +194,24 @@ export function EditCookieDialog({ open, onClose, onSuccess, onRefresh, cookie }
             <Label htmlFor="label">Label *</Label>
             <Select
               value={formData.label}
-              onValueChange={(value: 'new' | 'single' | 'double' | 'multi') => setFormData({ ...formData, label: value })}
+              onValueChange={(value: AssignableCookieLabel) => setFormData({ ...formData, label: value })}
             >
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="new">New</SelectItem>
-                <SelectItem value="single">Single</SelectItem>
-                <SelectItem value="double">Double</SelectItem>
-                <SelectItem value="multi">Multi</SelectItem>
+                {COOKIE_LABEL_OPTIONS.map((opt) => (
+                  <SelectItem key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </SelectItem>
+                ))}
+                {formData.label === 'multi' && (
+                  <SelectItem value="multi">Multi (legacy)</SelectItem>
+                )}
               </SelectContent>
             </Select>
             <p className="text-xs text-muted-foreground">
-              Cookie file label (new/single/double/multi)
+              Cookie file label
             </p>
           </div>
 
