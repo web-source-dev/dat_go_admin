@@ -5,8 +5,8 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { api, paymentsApi } from '@/lib/api';
-import { Payment, User } from '@/lib/types';
-import { CheckCircle, Clock, AlertCircle, Coins, RotateCcw, Undo2, ChevronDown, Image as ImageIcon, Upload } from 'lucide-react';
+import { Payment, PaymentProofImage, User } from '@/lib/types';
+import { CheckCircle, Clock, AlertCircle, Coins, RotateCcw, Undo2, ChevronDown, Image as ImageIcon, Upload, Trash2 } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -32,10 +32,12 @@ export function UserPaymentsEditor({ user, onClose }: UserPaymentsEditorProps) {
   const [showRefundDialog, setShowRefundDialog] = useState(false);
   const [selectedPayment, setSelectedPayment] = useState<Payment | null>(null);
   const [notes, setNotes] = useState('');
-  const [proofImage, setProofImage] = useState<File | null>(null);
+  const [proofImages, setProofImages] = useState<File[]>([]);
   const [refundNotes, setRefundNotes] = useState('');
   const [expandedPaymentId, setExpandedPaymentId] = useState<string | null>(null);
+  // Keyed by `${paymentId}:${imageId}` -> blob URL
   const [proofBlobUrls, setProofBlobUrls] = useState<Record<string, string>>({});
+  const [deletingProofKey, setDeletingProofKey] = useState<string | null>(null);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -66,9 +68,36 @@ export function UserPaymentsEditor({ user, onClose }: UserPaymentsEditorProps) {
     }
   };
 
+  // Resolve a payment's proof images, falling back to the legacy single-image fields
+  const getProofImages = (payment: Payment): PaymentProofImage[] => {
+    if (payment.paymentProofImages && payment.paymentProofImages.length > 0) {
+      return payment.paymentProofImages;
+    }
+    if (payment.paymentProofImagePath || payment.paymentProofImageUrl) {
+      return [
+        {
+          id: 'legacy',
+          originalName: payment.paymentProofOriginalName,
+          uploadedAt: payment.paymentProofUploadedAt,
+          url: payment.paymentProofImageUrl || `/payment/${payment._id}/proof-image`,
+        },
+      ];
+    }
+    return [];
+  };
+
+  const proofKey = (paymentId: string, imageId: string) => `${paymentId}:${imageId}`;
+
   const preloadProofImages = async (items: Payment[]) => {
-    const paymentsWithProof = items.filter((p) => !!p.paymentProofImagePath && !!p._id);
-    if (paymentsWithProof.length === 0) {
+    const tasks: { key: string; url: string }[] = [];
+    items.forEach((p) => {
+      if (!p._id) return;
+      getProofImages(p).forEach((img) => {
+        tasks.push({ key: proofKey(p._id, img.id), url: img.url });
+      });
+    });
+
+    if (tasks.length === 0) {
       setProofBlobUrls((prev) => {
         Object.values(prev).forEach((url) => URL.revokeObjectURL(url));
         return {};
@@ -77,15 +106,13 @@ export function UserPaymentsEditor({ user, onClose }: UserPaymentsEditorProps) {
     }
 
     const entries = await Promise.all(
-      paymentsWithProof.map(async (p) => {
+      tasks.map(async ({ key, url }) => {
         try {
-          const response = await api.get(`/payment/${p._id}/proof-image`, {
-            responseType: 'blob',
-          });
+          const response = await api.get(url, { responseType: 'blob' });
           const blobUrl = URL.createObjectURL(response.data);
-          return [p._id, blobUrl] as const;
+          return [key, blobUrl] as const;
         } catch {
-          return [p._id, ''] as const;
+          return [key, ''] as const;
         }
       })
     );
@@ -93,8 +120,8 @@ export function UserPaymentsEditor({ user, onClose }: UserPaymentsEditorProps) {
     setProofBlobUrls((prev) => {
       Object.values(prev).forEach((url) => URL.revokeObjectURL(url));
       const next: Record<string, string> = {};
-      entries.forEach(([id, url]) => {
-        if (url) next[id] = url;
+      entries.forEach(([key, url]) => {
+        if (url) next[key] = url;
       });
       return next;
     });
@@ -103,18 +130,21 @@ export function UserPaymentsEditor({ user, onClose }: UserPaymentsEditorProps) {
   const handleMarkAsPaid = async (payment: Payment) => {
     setSelectedPayment(payment);
     setNotes('');
-    setProofImage(null);
+    setProofImages([]);
     setShowNotesDialog(true);
   };
 
-  const handleUploadProofOnly = async (payment: Payment, file: File) => {
+  const handleUploadProofOnly = async (payment: Payment, files: File[]) => {
+    if (!files.length) return;
     setUpdatingPaymentId(payment._id);
     try {
-      await paymentsApi.uploadProofImage(payment._id, file);
+      await paymentsApi.uploadProofImages(payment._id, files);
       await fetchUserPayments();
       toast({
         title: 'Success',
-        description: 'Payment proof uploaded successfully',
+        description: files.length > 1
+          ? `${files.length} payment proofs uploaded successfully`
+          : 'Payment proof uploaded successfully',
       });
     } catch (error: any) {
       toast({
@@ -124,6 +154,27 @@ export function UserPaymentsEditor({ user, onClose }: UserPaymentsEditorProps) {
       });
     } finally {
       setUpdatingPaymentId(null);
+    }
+  };
+
+  const handleDeleteProof = async (payment: Payment, image: PaymentProofImage) => {
+    const key = proofKey(payment._id, image.id);
+    setDeletingProofKey(key);
+    try {
+      await paymentsApi.deleteProofImage(payment._id, image.id);
+      await fetchUserPayments();
+      toast({
+        title: 'Success',
+        description: 'Payment proof deleted',
+      });
+    } catch (error: any) {
+      toast({
+        title: 'Error',
+        description: error.response?.data?.message || 'Failed to delete payment proof',
+        variant: 'destructive',
+      });
+    } finally {
+      setDeletingProofKey(null);
     }
   };
 
@@ -140,8 +191,8 @@ export function UserPaymentsEditor({ user, onClose }: UserPaymentsEditorProps) {
       return;
     }
 
-    const hasExistingProof = !!selectedPayment.paymentProofImagePath;
-    if (!hasExistingProof && !proofImage) {
+    const hasExistingProof = getProofImages(selectedPayment).length > 0;
+    if (!hasExistingProof && proofImages.length === 0) {
       toast({
         title: 'Error',
         description: 'Please upload payment screenshot/proof image before marking as paid',
@@ -152,8 +203,8 @@ export function UserPaymentsEditor({ user, onClose }: UserPaymentsEditorProps) {
 
     setUpdatingPaymentId(selectedPayment._id);
     try {
-      if (proofImage) {
-        await paymentsApi.uploadProofImage(selectedPayment._id, proofImage);
+      if (proofImages.length > 0) {
+        await paymentsApi.uploadProofImages(selectedPayment._id, proofImages);
       }
       await paymentsApi.updateStatus(selectedPayment._id, 'paid', notes.trim());
       await fetchUserPayments();
@@ -166,7 +217,7 @@ export function UserPaymentsEditor({ user, onClose }: UserPaymentsEditorProps) {
       setShowNotesDialog(false);
       setSelectedPayment(null);
       setNotes('');
-      setProofImage(null);
+      setProofImages([]);
     } catch (error: any) {
       toast({
         title: 'Error',
@@ -178,9 +229,8 @@ export function UserPaymentsEditor({ user, onClose }: UserPaymentsEditorProps) {
     }
   };
 
-  const getPaymentProofImageUrl = (payment: Payment) => {
-    if (!payment?._id) return null;
-    return proofBlobUrls[payment._id] || null;
+  const getProofBlobUrl = (paymentId: string, imageId: string) => {
+    return proofBlobUrls[proofKey(paymentId, imageId)] || null;
   };
 
   const handleRefund = async (payment: Payment) => {
@@ -658,32 +708,58 @@ export function UserPaymentsEditor({ user, onClose }: UserPaymentsEditorProps) {
                       )}
 
                       <div className="pt-2 border-t border-border">
-                        {payment.paymentProofImagePath ? (
-                          <div className="space-y-2">
-                            <div className="text-xs font-medium text-muted-foreground flex items-center gap-1">
-                              <ImageIcon size={12} />
-                              Payment Proof
+                        {(() => {
+                          const proofImages = getProofImages(payment);
+                          if (proofImages.length === 0) {
+                            return <div className="text-xs text-orange-600">No payment proof uploaded</div>;
+                          }
+                          return (
+                            <div className="space-y-2">
+                              <div className="text-xs font-medium text-muted-foreground flex items-center gap-1">
+                                <ImageIcon size={12} />
+                                Payment Proof ({proofImages.length})
+                              </div>
+                              <div className="flex flex-wrap gap-3">
+                                {proofImages.map((image) => {
+                                  const blobUrl = getProofBlobUrl(payment._id, image.id);
+                                  const key = proofKey(payment._id, image.id);
+                                  return (
+                                    <div key={image.id} className="relative group">
+                                      <a
+                                        href={blobUrl || '#'}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="inline-block"
+                                        onClick={(e) => e.stopPropagation()}
+                                      >
+                                        <img
+                                          src={blobUrl || ''}
+                                          alt={image.originalName || 'Payment proof'}
+                                          className="h-24 w-auto rounded border object-cover"
+                                        />
+                                      </a>
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleDeleteProof(payment, image);
+                                        }}
+                                        disabled={deletingProofKey === key}
+                                        title="Delete proof"
+                                        className="absolute top-1 right-1 bg-red-600 text-white rounded p-1 opacity-80 hover:opacity-100 disabled:opacity-50"
+                                      >
+                                        <Trash2 size={12} />
+                                      </button>
+                                      <div className="text-[11px] text-muted-foreground max-w-24 truncate">
+                                        {image.originalName || 'proof-image'}
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
                             </div>
-                            <a
-                              href={getPaymentProofImageUrl(payment) || '#'}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="inline-block"
-                              onClick={(e) => e.stopPropagation()}
-                            >
-                              <img
-                                src={getPaymentProofImageUrl(payment) || ''}
-                                alt="Payment proof"
-                                className="h-24 w-auto rounded border object-cover"
-                              />
-                            </a>
-                            <div className="text-[11px] text-muted-foreground">
-                              {payment.paymentProofOriginalName || 'proof-image'}
-                            </div>
-                          </div>
-                        ) : (
-                          <div className="text-xs text-orange-600">No payment proof uploaded</div>
-                        )}
+                          );
+                        })()}
                       </div>
 
                       {payment.refundNotes && (
@@ -702,11 +778,12 @@ export function UserPaymentsEditor({ user, onClose }: UserPaymentsEditorProps) {
                             const input = document.createElement('input');
                             input.type = 'file';
                             input.accept = 'image/*';
+                            input.multiple = true;
                             input.onchange = async (event: Event) => {
                               const target = event.target as HTMLInputElement;
-                              const file = target.files?.[0];
-                              if (file) {
-                                await handleUploadProofOnly(payment, file);
+                              const files = target.files ? Array.from(target.files) : [];
+                              if (files.length) {
+                                await handleUploadProofOnly(payment, files);
                               }
                             };
                             input.click();
@@ -715,7 +792,7 @@ export function UserPaymentsEditor({ user, onClose }: UserPaymentsEditorProps) {
                           className="text-xs"
                         >
                           <Upload size={12} className="mr-1" />
-                          Upload Proof
+                          Upload Proof(s)
                         </Button>
                         {payment.status === 'pending' && (
                           <Button
@@ -791,16 +868,22 @@ export function UserPaymentsEditor({ user, onClose }: UserPaymentsEditorProps) {
                 required
               />
               <div className="space-y-2">
-                <Label htmlFor="paymentProofImage">Payment Screenshot / Proof *</Label>
+                <Label htmlFor="paymentProofImage">Payment Screenshot(s) / Proof *</Label>
                 <Input
                   id="paymentProofImage"
                   type="file"
                   accept="image/*"
-                  onChange={(e) => setProofImage(e.target.files?.[0] || null)}
+                  multiple
+                  onChange={(e) => setProofImages(e.target.files ? Array.from(e.target.files) : [])}
                 />
-                {selectedPayment?.paymentProofImagePath && (
+                {proofImages.length > 0 && (
                   <p className="text-xs text-muted-foreground">
-                    Existing proof found. Upload a new file only if you want to replace it.
+                    {proofImages.length} file{proofImages.length > 1 ? 's' : ''} selected
+                  </p>
+                )}
+                {selectedPayment && getProofImages(selectedPayment).length > 0 && (
+                  <p className="text-xs text-muted-foreground">
+                    {getProofImages(selectedPayment).length} existing proof image(s). New uploads are added to the gallery.
                   </p>
                 )}
               </div>

@@ -79,6 +79,13 @@ export interface Session {
   label?: CookieLabel;
 }
 
+export interface PaymentProofImage {
+  id: string;
+  originalName?: string | null;
+  uploadedAt?: string | null;
+  url: string;
+}
+
 export interface Payment {
   _id: string;
   userId: User | string;
@@ -93,6 +100,7 @@ export interface Payment {
   paymentProofOriginalName?: string | null;
   paymentProofUploadedAt?: string | null;
   paymentProofImageUrl?: string | null;
+  paymentProofImages?: PaymentProofImage[];
   createdAt: string;
   updatedAt: string;
   period?: string; // Virtual field for display

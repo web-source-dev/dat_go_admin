@@ -141,13 +141,22 @@ export const paymentsApi = {
   },
 
   uploadProofImage: async (paymentId: string, file: File) => {
+    return paymentsApi.uploadProofImages(paymentId, [file]);
+  },
+
+  uploadProofImages: async (paymentId: string, files: File[]) => {
     const formData = new FormData();
-    formData.append('image', file);
+    files.forEach((file) => formData.append('images', file));
     const response = await api.post(`/payment/${paymentId}/proof-image`, formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
       },
     });
+    return response.data;
+  },
+
+  deleteProofImage: async (paymentId: string, imageId: string) => {
+    const response = await api.delete(`/payment/${paymentId}/proof-image/${imageId}`);
     return response.data;
   },
 
