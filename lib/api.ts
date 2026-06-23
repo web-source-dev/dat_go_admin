@@ -310,45 +310,80 @@ export const messagesApi = {
   },
 };
 
-// Scheduler API
+// Backend deployments the scheduler can target. It's the same service behind
+// three domains (primary -> backup -> legacy fallback), and each deployment runs
+// its own cron/scheduler. The admin can trigger a job on a specific backend or
+// fan it out to all of them. Override the URLs per environment via NEXT_PUBLIC_* .
+export type SchedulerBackendKey = 'primary' | 'backup' | 'fallback';
+
+export interface SchedulerBackend {
+  key: SchedulerBackendKey;
+  label: string;
+  url: string;
+}
+
+export const SCHEDULER_BACKENDS: SchedulerBackend[] = [
+  {
+    key: 'primary',
+    label: 'Primary',
+    url: process.env.NEXT_PUBLIC_API_PRIMARY_URL || 'https://datbackend.apexskillzone.com',
+  },
+  {
+    key: 'backup',
+    label: 'Backup',
+    url: process.env.NEXT_PUBLIC_API_BACKUP_URL || 'https://datbackup.apexskillzone.com',
+  },
+  {
+    key: 'fallback',
+    label: 'Fallback',
+    url: process.env.NEXT_PUBLIC_API_FALLBACK_URL || 'https://api.kmldigital.xyz',
+  },
+];
+
+// Per-request config that points a call at a specific backend. When baseURL is
+// omitted the default `api` baseURL (NEXT_PUBLIC_API_BASE_URL) is used.
+const at = (baseURL?: string) => (baseURL ? { baseURL } : undefined);
+
+// Scheduler API. Every method accepts an optional `baseURL` to target a specific
+// backend (see SCHEDULER_BACKENDS); without it, the default backend is used.
 export const schedulerApi = {
-  getStatus: async () => {
-    const response = await api.get('/scheduler/status');
+  getStatus: async (baseURL?: string) => {
+    const response = await api.get('/scheduler/status', at(baseURL));
     return response.data;
   },
 
-  triggerSync: async () => {
-    const response = await api.post('/scheduler/trigger/sync');
+  triggerSync: async (baseURL?: string) => {
+    const response = await api.post('/scheduler/trigger/sync', undefined, at(baseURL));
     return response.data;
   },
 
-  triggerDownload: async () => {
-    const response = await api.post('/scheduler/trigger/download');
+  triggerDownload: async (baseURL?: string) => {
+    const response = await api.post('/scheduler/trigger/download', undefined, at(baseURL));
     return response.data;
   },
 
-  triggerFull: async () => {
-    const response = await api.post('/scheduler/trigger/full');
+  triggerFull: async (baseURL?: string) => {
+    const response = await api.post('/scheduler/trigger/full', undefined, at(baseURL));
     return response.data;
   },
 
-  triggerPaymentCheck: async () => {
-    const response = await api.post('/scheduler/trigger/payments');
+  triggerPaymentCheck: async (baseURL?: string) => {
+    const response = await api.post('/scheduler/trigger/payments', undefined, at(baseURL));
     return response.data;
   },
 
-  triggerReferralUpdate: async () => {
-    const response = await api.post('/scheduler/trigger/referrals');
+  triggerReferralUpdate: async (baseURL?: string) => {
+    const response = await api.post('/scheduler/trigger/referrals', undefined, at(baseURL));
     return response.data;
   },
 
-  triggerBackup: async () => {
-    const response = await api.post('/scheduler/trigger/backup');
+  triggerBackup: async (baseURL?: string) => {
+    const response = await api.post('/scheduler/trigger/backup', undefined, at(baseURL));
     return response.data;
   },
 
-  triggerFreightdesk: async () => {
-    const response = await api.post('/scheduler/trigger/freightdesk');
+  triggerFreightdesk: async (baseURL?: string) => {
+    const response = await api.post('/scheduler/trigger/freightdesk', undefined, at(baseURL));
     return response.data;
   },
 };

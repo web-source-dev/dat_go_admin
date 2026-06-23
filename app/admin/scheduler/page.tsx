@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { schedulerApi } from '@/lib/api';
+import { useState, useEffect, useCallback } from 'react';
+import { schedulerApi, SCHEDULER_BACKENDS, type SchedulerBackendKey } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -18,97 +18,104 @@ interface SchedulerStatus {
   nextBackupRun?: string | null;
 }
 
+// Which backend(s) a trigger runs against. 'all' fans out to every backend.
+type TargetKey = SchedulerBackendKey | 'all';
+
+// Map each action to its scheduler API call (each accepts a target baseURL).
+const TRIGGERS: Record<string, (baseURL?: string) => Promise<any>> = {
+  sync: schedulerApi.triggerSync,
+  download: schedulerApi.triggerDownload,
+  full: schedulerApi.triggerFull,
+  payments: schedulerApi.triggerPaymentCheck,
+  referrals: schedulerApi.triggerReferralUpdate,
+  backup: schedulerApi.triggerBackup,
+  freightdesk: schedulerApi.triggerFreightdesk,
+};
+
+// Build a short human summary from a trigger response (per backend).
+function summarize(action: string, response: any): string | undefined {
+  const data = response?.data;
+  if (!data) return undefined;
+  if (action === 'backup' && data.skipped) {
+    if (data.reason === 'no-target-uri') return 'Skipped: set MONGODB_BACKUP_TARGET_URI on the server.';
+    if (data.reason === 'target-same-as-primary' || data.reason === 'target-same-as-source')
+      return 'Skipped: backup target URI must differ from the source URI.';
+    if (data.reason === 'already-running') return 'Skipped: a backup is already running.';
+    return `Skipped: ${(data.reason as string) || 'see server logs.'}`;
+  }
+  if (data.created !== undefined)
+    return `Sessions: ${data.created} created, ${data.updated} updated, ${data.deleted} deleted`;
+  if (data.imported !== undefined && action === 'freightdesk')
+    return `FreightDesk: ${data.imported} imported, ${data.failed || 0} failed`;
+  if (data.checked !== undefined) return `Payments: ${data.checked} checked, ${data.banned} banned`;
+  if (data.updated !== undefined && action !== 'backup') return `Referrals: ${data.updated} updated`;
+  if (data.collections && action === 'backup') {
+    const entries = Object.entries(data.collections as Record<string, number>);
+    return `Synced — ${entries.map(([k, v]) => `${k}: ${v}`).join(', ')}`;
+  }
+  return undefined;
+}
+
 export default function SchedulerPage() {
   const [status, setStatus] = useState<SchedulerStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [target, setTarget] = useState<TargetKey>('primary');
 
-  useEffect(() => {
-    fetchStatus();
-  }, []);
+  // The backend whose status we display: the selected one, or Primary for 'all'.
+  const statusBackend =
+    target === 'all'
+      ? SCHEDULER_BACKENDS[0]
+      : SCHEDULER_BACKENDS.find((b) => b.key === target) || SCHEDULER_BACKENDS[0];
 
-  const fetchStatus = async () => {
+  const fetchStatus = useCallback(async () => {
     try {
-      const response = await schedulerApi.getStatus();
+      const response = await schedulerApi.getStatus(statusBackend.url);
       setStatus(response.data);
     } catch (error) {
       console.error('Error fetching scheduler status:', error);
-      toast.error('Failed to fetch scheduler status');
+      setStatus(null);
+      toast.error(`Failed to fetch status from ${statusBackend.label}`);
     } finally {
       setLoading(false);
     }
-  };
+  }, [statusBackend.url, statusBackend.label]);
+
+  useEffect(() => {
+    fetchStatus();
+  }, [fetchStatus]);
+
+  // Backends this trigger should run on, based on the current target selection.
+  const resolveTargets = () =>
+    target === 'all' ? SCHEDULER_BACKENDS : SCHEDULER_BACKENDS.filter((b) => b.key === target);
 
   const handleAction = async (action: string, actionName: string) => {
+    const fn = TRIGGERS[action];
+    if (!fn) return;
+    const targets = resolveTargets();
+
     setActionLoading(action);
-    try {
-      let response;
-      switch (action) {
-        case 'sync':
-          response = await schedulerApi.triggerSync();
-          break;
-        case 'download':
-          response = await schedulerApi.triggerDownload();
-          break;
-        case 'full':
-          response = await schedulerApi.triggerFull();
-          break;
-        case 'payments':
-          response = await schedulerApi.triggerPaymentCheck();
-          break;
-        case 'referrals':
-          response = await schedulerApi.triggerReferralUpdate();
-          break;
-        case 'backup':
-          response = await schedulerApi.triggerBackup();
-          break;
-        case 'freightdesk':
-          response = await schedulerApi.triggerFreightdesk();
-          break;
-        default:
-          throw new Error('Unknown action');
-      }
+    // Run against each selected backend independently so one failure doesn't
+    // block the others (important for the "All backends" option).
+    const results = await Promise.allSettled(targets.map((b) => fn(b.url)));
 
-      if (action === 'backup' && response.data?.skipped) {
-        toast.message('Database backup skipped', {
-          description:
-            response.data.reason === 'no-target-uri'
-              ? 'Set MONGODB_BACKUP_TARGET_URI on the server.'
-              : response.data.reason === 'target-same-as-primary' || response.data.reason === 'target-same-as-source'
-                ? 'Backup target URI must differ from the source URI.'
-                : response.data.reason === 'already-running'
-                  ? 'A backup is already running.'
-                  : (response.data.reason as string) || 'See server logs.',
-        });
+    let anyOk = false;
+    results.forEach((result, i) => {
+      const backend = targets[i];
+      if (result.status === 'fulfilled') {
+        anyOk = true;
+        const detail = summarize(action, result.value);
+        toast.success(`${backend.label}: ${actionName} ✓`, detail ? { description: detail } : undefined);
       } else {
-        toast.success(`${actionName} completed successfully`);
+        const error: any = result.reason;
+        toast.error(`${backend.label}: ${actionName} failed`, {
+          description: error?.response?.data?.message || error?.message || 'Request failed',
+        });
       }
+    });
 
-      // Show additional details if available
-      if (response.data) {
-        if (response.data.created !== undefined) {
-          toast.info(`Sessions: ${response.data.created} created, ${response.data.updated} updated, ${response.data.deleted} deleted`);
-        } else if (response.data.imported !== undefined && action === 'freightdesk') {
-          toast.info(`FreightDesk: ${response.data.imported} imported, ${response.data.failed || 0} failed`);
-        } else if (response.data.checked !== undefined) {
-          toast.info(`Payments: ${response.data.checked} checked, ${response.data.banned} users banned`);
-        } else if (response.data.updated !== undefined && action !== 'backup') {
-          toast.info(`Referrals: ${response.data.updated} discount statuses updated`);
-        } else if (response.data.collections && action === 'backup') {
-          const entries = Object.entries(response.data.collections as Record<string, number>);
-          const summary = entries.map(([k, v]) => `${k}: ${v}`).join(', ');
-          toast.info(`Synced collections — ${summary}`);
-        }
-      }
-
-      // Refresh status after action
-      await fetchStatus();
-    } catch (error: any) {
-      console.error(`Error triggering ${action}:`, error);
-      toast.error(`Failed to ${actionName.toLowerCase()}: ${error.response?.data?.message || error.message}`);
-    } finally {
-      setActionLoading(null);
-    }
+    if (anyOk) await fetchStatus();
+    setActionLoading(null);
   };
 
   if (loading) {
@@ -128,13 +135,64 @@ export default function SchedulerPage() {
         <p className="text-gray-600 mt-2">Manually trigger scheduled tasks and monitor system status</p>
       </div>
 
+      {/* Backend target selector */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">Run on backend</CardTitle>
+          <CardDescription>
+            Choose which backend deployment the triggers below run on, or run them on all three at once.
+            Each backend runs its own scheduler.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="flex flex-wrap items-center gap-2">
+            {SCHEDULER_BACKENDS.map((b) => (
+              <Button
+                key={b.key}
+                size="sm"
+                variant={target === b.key ? 'default' : 'outline'}
+                onClick={() => setTarget(b.key)}
+              >
+                {b.label}
+              </Button>
+            ))}
+            <Button
+              size="sm"
+              variant={target === 'all' ? 'default' : 'outline'}
+              onClick={() => setTarget('all')}
+            >
+              All backends
+            </Button>
+          </div>
+          <div className="text-xs text-muted-foreground space-y-1">
+            {target === 'all' ? (
+              SCHEDULER_BACKENDS.map((b) => (
+                <div key={b.key}>
+                  <span className="font-medium">{b.label}:</span>{' '}
+                  <code className="bg-muted px-1 rounded">{b.url}</code>
+                </div>
+              ))
+            ) : (
+              <div>
+                <span className="font-medium">{statusBackend.label}:</span>{' '}
+                <code className="bg-muted px-1 rounded">{statusBackend.url}</code>
+              </div>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Status Card */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             Scheduler Status
+            <Badge variant="outline">{statusBackend.label}</Badge>
           </CardTitle>
-          <CardDescription>Current state and next scheduled run</CardDescription>
+          <CardDescription>
+            Current state and next scheduled run for the {statusBackend.label} backend
+            {target === 'all' ? ' (status is shown per backend; All runs triggers on every backend)' : ''}
+          </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex items-center justify-between">
