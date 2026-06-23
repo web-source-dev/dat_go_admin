@@ -388,6 +388,25 @@ export const schedulerApi = {
   },
 };
 
+// App auto-update on/off (per app). Stored in the shared backend DB, so a single
+// call affects every backend deployment. Optional baseURL targets a specific one.
+export interface AppUpdateConfig {
+  app: string;
+  updatesEnabled: boolean;
+}
+
+export const updatesApi = {
+  getConfig: async (baseURL?: string): Promise<{ success: boolean; data: AppUpdateConfig[] }> => {
+    const response = await api.get('/update/config', at(baseURL));
+    return response.data;
+  },
+
+  setConfig: async (app: string, updatesEnabled: boolean, baseURL?: string) => {
+    const response = await api.put(`/update/config/${encodeURIComponent(app)}`, { updatesEnabled }, at(baseURL));
+    return response.data;
+  },
+};
+
 // Salesperson Commission API
 export const salespersonCommissionApi = {
   getAll: async (params?: { page?: number; limit?: number; salespersonId?: string; month?: number; year?: number }) => {

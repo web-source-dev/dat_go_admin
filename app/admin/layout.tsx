@@ -4,7 +4,7 @@ import React, { useEffect } from "react"
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Users, Lock, Settings, LogOut, Cookie, MessageSquare, Clock, Users as UsersIcon, LayoutGrid, Boxes } from 'lucide-react';
+import { Users, Lock, Settings, LogOut, Cookie, MessageSquare, Clock, Users as UsersIcon, LayoutGrid, Boxes, Download } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
 import { Toaster } from '@/components/ui/sonner';
 
@@ -17,6 +17,7 @@ const navigation = [
   { name: 'Messages', href: '/admin/messages', icon: MessageSquare },
   { name: 'Salesperson', href: '/admin/salesperson-commission', icon: Users },
   { name: 'Scheduler', href: '/admin/scheduler', icon: Clock },
+  { name: 'App Updates', href: '/admin/updates', icon: Download },
 ];
 
 export default function AdminLayout({
