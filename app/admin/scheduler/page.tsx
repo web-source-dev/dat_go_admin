@@ -6,6 +6,16 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { toast } from 'sonner';
 
 interface SchedulerStatus {
@@ -61,6 +71,8 @@ export default function SchedulerPage() {
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [target, setTarget] = useState<TargetKey>('primary');
+  // The trigger awaiting confirmation in the dialog (null = no dialog open).
+  const [pendingAction, setPendingAction] = useState<{ action: string; name: string } | null>(null);
 
   // The backend whose status we display: the selected one, or Primary for 'all'.
   const statusBackend =
@@ -89,7 +101,13 @@ export default function SchedulerPage() {
   const resolveTargets = () =>
     target === 'all' ? SCHEDULER_BACKENDS : SCHEDULER_BACKENDS.filter((b) => b.key === target);
 
-  const handleAction = async (action: string, actionName: string) => {
+  // Clicking a trigger opens the confirmation dialog first; it only runs on confirm.
+  const handleAction = (action: string, actionName: string) => {
+    setPendingAction({ action, name: actionName });
+  };
+
+  // Runs the confirmed trigger against the selected backend(s).
+  const runAction = async (action: string, actionName: string) => {
     const fn = TRIGGERS[action];
     if (!fn) return;
     const targets = resolveTargets();
@@ -517,6 +535,51 @@ export default function SchedulerPage() {
           </p>
         </CardContent>
       </Card>
+
+      {/* Confirmation: asks whether to run on all backends or the selected one before triggering */}
+      <AlertDialog
+        open={!!pendingAction}
+        onOpenChange={(open) => {
+          if (!open) setPendingAction(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Run “{pendingAction?.name}”?</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-2">
+                <p>
+                  This will run on{' '}
+                  <span className="font-medium">
+                    {target === 'all' ? 'all backends' : `the ${statusBackend.label} backend`}
+                  </span>
+                  :
+                </p>
+                <ul className="list-disc pl-5 space-y-1">
+                  {resolveTargets().map((b) => (
+                    <li key={b.key}>
+                      <span className="font-medium">{b.label}</span> —{' '}
+                      <code className="text-xs bg-muted px-1 rounded">{b.url}</code>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                const p = pendingAction;
+                setPendingAction(null);
+                if (p) runAction(p.action, p.name);
+              }}
+            >
+              Run now
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
