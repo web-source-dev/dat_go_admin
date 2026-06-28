@@ -81,11 +81,11 @@ export default function FreightdeskSessionsPage() {
   const handleImport = async (container: string, activate = false) => {
     setWorking(`${container}-import`);
     try {
-      await freightdeskApi.importContainer(container, { activate, channel });
+      await freightdeskApi.importContainer(container, { activate, channel, forceReimport: true });
       await fetchData();
       setError(null);
     } catch (err: any) {
-      setError(err.response?.data?.message || err.message || `Failed to import ${container}`);
+      setError(err.response?.data?.message || err.message || `Failed to re-import ${container}`);
     } finally {
       setWorking(null);
     }
@@ -123,11 +123,11 @@ export default function FreightdeskSessionsPage() {
   const handleImportAll = async (activate = false) => {
     setWorking('import-all');
     try {
-      await freightdeskApi.importAll({ activate, channel });
+      await freightdeskApi.importAll({ activate, channel, forceReimport: true });
       await fetchData();
       setError(null);
     } catch (err: any) {
-      setError(err.response?.data?.message || err.message || 'Failed to import all containers');
+      setError(err.response?.data?.message || err.message || 'Failed to re-import all containers');
     } finally {
       setWorking(null);
     }
@@ -181,11 +181,11 @@ export default function FreightdeskSessionsPage() {
             </Button>
             <Button variant="outline" onClick={() => handleImportAll(false)} disabled={working !== null}>
               <Download size={18} className="mr-2" />
-              Import All
+              Re-import All
             </Button>
             <Button onClick={() => handleImportAll(true)} disabled={working !== null}>
               <Upload size={18} className="mr-2" />
-              Import & Activate Last
+              Re-import & Activate Last
             </Button>
           </div>
         </div>
@@ -276,7 +276,7 @@ export default function FreightdeskSessionsPage() {
                       onClick={() => handleImport(session.container, false)}
                     >
                       <Download size={16} className="mr-2" />
-                      {working === `${session.container}-import` ? 'Importing...' : 'Import'}
+                      {working === `${session.container}-import` ? 'Re-importing...' : 'Re-import'}
                     </Button>
                     <Button
                       size="sm"

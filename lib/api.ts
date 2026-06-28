@@ -460,16 +460,30 @@ export const freightdeskApi = {
 
   importContainer: async (
     container: string,
-    options?: { activate?: boolean; channel?: 'single' | 'double' | 'multi' | 'swiftSolutions' | 'dathub' }
+    options?: {
+      activate?: boolean;
+      channel?: 'single' | 'double' | 'multi' | 'swiftSolutions' | 'dathub';
+      forceReimport?: boolean;
+    }
   ) => {
-    const response = await api.post(`/freightdesk/import/${encodeURIComponent(container)}`, options || {});
+    const response = await api.post(`/freightdesk/import/${encodeURIComponent(container)}`, {
+      forceReimport: true,
+      ...options,
+    });
     return response.data;
   },
 
   importAll: async (
-    options?: { activate?: boolean; channel?: 'single' | 'double' | 'multi' | 'swiftSolutions' | 'dathub' }
+    options?: {
+      activate?: boolean;
+      channel?: 'single' | 'double' | 'multi' | 'swiftSolutions' | 'dathub';
+      forceReimport?: boolean;
+    }
   ) => {
-    const response = await api.post('/freightdesk/import-all', options || {});
+    const response = await api.post('/freightdesk/import-all', {
+      forceReimport: true,
+      ...options,
+    });
     return response.data;
   },
 
