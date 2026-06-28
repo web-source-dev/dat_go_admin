@@ -94,7 +94,7 @@ export default function FreightdeskSessionsPage() {
   const handleActivate = async (container: string) => {
     setWorking(`${container}-activate`);
     try {
-      await freightdeskApi.activate(container, channel);
+      await freightdeskApi.importContainer(container, { activate: true, channel, forceReimport: true });
       await fetchData();
       setError(null);
     } catch (err: any) {
@@ -221,7 +221,10 @@ export default function FreightdeskSessionsPage() {
                     <div>
                       <div className="text-3xl font-bold text-foreground">{session.container}</div>
                       <p className="text-sm text-muted-foreground mt-1">
-                        {session.cookieCount} cookies
+                        {session.remoteCookieCount ?? session.cookieCount} remote
+                        {session.localCookieCount !== undefined
+                          ? ` · ${session.localCookieCount} local`
+                          : ''}
                       </p>
                     </div>
                     {active ? (
@@ -262,8 +265,8 @@ export default function FreightdeskSessionsPage() {
                     </div>
                     <div className="text-muted-foreground">
                       Imported:{' '}
-                      <span className={session.imported ? 'text-green-600' : 'text-foreground'}>
-                        {session.imported ? 'Yes' : 'No'}
+                      <span className={session.ready ? 'text-green-600' : session.imported ? 'text-amber-600' : 'text-foreground'}>
+                        {session.ready ? 'Ready' : session.imported ? 'Stale' : 'No'}
                       </span>
                     </div>
                   </div>
@@ -286,14 +289,14 @@ export default function FreightdeskSessionsPage() {
                       <Upload size={16} className="mr-2" />
                       Import & Activate
                     </Button>
-                    {session.imported && !active && (
+                    {session.ready && !active && (
                       <Button
                         variant="secondary"
                         size="sm"
                         disabled={busy || working !== null}
                         onClick={() => handleActivate(session.container)}
                       >
-                        Activate
+                        {working === `${session.container}-activate` ? 'Activating...' : 'Activate'}
                       </Button>
                     )}
                   </div>

@@ -153,8 +153,11 @@ export interface Cookie {
 export interface FreightdeskContainerSession {
   container: string;
   cookieCount: number;
+  remoteCookieCount?: number;
+  localCookieCount?: number;
   lastUpdated?: string | null;
   imported: boolean;
+  ready?: boolean;
   cookieId?: string | null;
   fileName: string;
   label?: CookieLabel | null;
