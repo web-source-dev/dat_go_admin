@@ -120,8 +120,14 @@ export const extensionProxyApi = {
 
   updateConfig: async (payload: {
     enabled?: boolean;
-    source?: 'env' | 'session';
+    source?: 'env' | 'session' | 'custom';
     sessionId?: string | null;
+    customProxy?: {
+      host?: string;
+      port?: number | string;
+      username?: string;
+      password?: string;
+    };
   }) => {
     const response = await api.put('/proxy/admin/config', payload);
     return response.data as import('./types').ExtensionProxyAdminConfig & { message?: string };

@@ -5,13 +5,16 @@ import {
   CheckCircle2,
   Globe,
   Loader2,
+  Pencil,
   RefreshCw,
   Save,
   Server,
   Shield,
+  Wrench,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import {
   Select,
@@ -30,12 +33,18 @@ function maskProxyPreview(proxy: string) {
   return `${parts[0]}:${parts[1]}`;
 }
 
+type ProxySource = 'env' | 'session' | 'custom';
+
 export default function ExtensionProxyPage() {
   const [config, setConfig] = useState<ExtensionProxyAdminConfig | null>(null);
   const [sessions, setSessions] = useState<Session[]>([]);
   const [enabled, setEnabled] = useState(true);
-  const [source, setSource] = useState<'env' | 'session'>('env');
+  const [source, setSource] = useState<ProxySource>('env');
   const [sessionId, setSessionId] = useState<string>('');
+  const [customHost, setCustomHost] = useState('');
+  const [customPort, setCustomPort] = useState('');
+  const [customUsername, setCustomUsername] = useState('');
+  const [customPassword, setCustomPassword] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -44,6 +53,10 @@ export default function ExtensionProxyPage() {
     setEnabled(data.enabled);
     setSource(data.source);
     setSessionId(data.sessionId || '');
+    setCustomHost(data.custom?.host || '');
+    setCustomPort(data.custom?.port ? String(data.custom.port) : '');
+    setCustomUsername(data.custom?.username || '');
+    setCustomPassword(data.custom?.password || '');
   };
 
   const loadData = useCallback(async () => {
@@ -68,18 +81,53 @@ export default function ExtensionProxyPage() {
     loadData();
   }, [loadData]);
 
+  const buildPayload = () => {
+    const payload: Parameters<typeof extensionProxyApi.updateConfig>[0] = {
+      enabled,
+      source,
+      sessionId: source === 'session' ? sessionId || null : null,
+    };
+
+    if (source === 'custom' || customHost || customPort || customUsername || customPassword) {
+      payload.customProxy = {
+        host: customHost,
+        port: customPort,
+        username: customUsername,
+        password: customPassword,
+      };
+    }
+
+    return payload;
+  };
+
   const handleSave = async () => {
     setSaving(true);
     try {
-      const data = await extensionProxyApi.updateConfig({
-        enabled,
-        source,
-        sessionId: source === 'session' ? sessionId || null : null,
-      });
+      const data = await extensionProxyApi.updateConfig(buildPayload());
       applyConfig(data);
       toast.success(data.message || 'Extension proxy saved');
     } catch (err: any) {
       toast.error(err.response?.data?.message || err.message || 'Failed to save');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleSaveCustomOnly = async () => {
+    setSaving(true);
+    try {
+      const data = await extensionProxyApi.updateConfig({
+        customProxy: {
+          host: customHost,
+          port: customPort,
+          username: customUsername,
+          password: customPassword,
+        },
+      });
+      applyConfig(data);
+      toast.success('Custom proxy details saved');
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || err.message || 'Failed to save custom proxy');
     } finally {
       setSaving(false);
     }
@@ -101,6 +149,12 @@ export default function ExtensionProxyPage() {
       setSaving(false);
     }
   };
+
+  const customValid = Boolean(customHost.trim() && parseInt(customPort, 10) > 0);
+  const saveDisabled =
+    saving ||
+    (source === 'session' && !sessionId) ||
+    (source === 'custom' && !customValid);
 
   if (loading) {
     return (
@@ -133,7 +187,7 @@ export default function ExtensionProxyPage() {
         </div>
       </div>
 
-      <div className="px-8 py-6 space-y-6 max-w-3xl">
+      <div className="px-8 py-6 space-y-6 max-w-4xl">
         {active?.enabled && !active.error && (
           <div className="flex items-start gap-3 rounded-lg border border-green-500/30 bg-green-500/10 px-4 py-3">
             <CheckCircle2 className="h-5 w-5 text-green-600 shrink-0 mt-0.5" />
@@ -168,7 +222,7 @@ export default function ExtensionProxyPage() {
 
           <div className="space-y-3">
             <p className="font-medium text-foreground">Proxy source</p>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <button
                 type="button"
                 onClick={() => setSource('env')}
@@ -180,10 +234,10 @@ export default function ExtensionProxyPage() {
               >
                 <div className="flex items-center gap-2 font-medium">
                   <Server className="h-4 w-4" />
-                  Server environment (.env)
+                  Server .env
                 </div>
                 <p className="text-xs text-muted-foreground mt-2">
-                  Uses PROXY_HOST, PROXY_PORT, PROXY_USERNAME, PROXY_PASSWORD from backend .env
+                  PROXY_* variables from backend .env
                 </p>
                 {config?.env.configured && (
                   <p className="text-xs font-mono mt-2 text-foreground">
@@ -203,11 +257,34 @@ export default function ExtensionProxyPage() {
               >
                 <div className="flex items-center gap-2 font-medium">
                   <Shield className="h-4 w-4" />
-                  DAT session proxy
+                  DAT session
                 </div>
                 <p className="text-xs text-muted-foreground mt-2">
-                  Use the proxy string from a specific DAT session
+                  Proxy from a DAT session record
                 </p>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setSource('custom')}
+                className={`text-left rounded-lg border p-4 transition-colors ${
+                  source === 'custom'
+                    ? 'border-primary bg-primary/5 ring-1 ring-primary'
+                    : 'border-border hover:bg-muted/50'
+                }`}
+              >
+                <div className="flex items-center gap-2 font-medium">
+                  <Wrench className="h-4 w-4" />
+                  Custom proxy
+                </div>
+                <p className="text-xs text-muted-foreground mt-2">
+                  Manually enter host, port, and credentials
+                </p>
+                {config?.custom?.configured && (
+                  <p className="text-xs font-mono mt-2 text-foreground">
+                    {config.custom.host}:{config.custom.port}
+                  </p>
+                )}
               </button>
             </div>
           </div>
@@ -228,19 +305,81 @@ export default function ExtensionProxyPage() {
                 </SelectContent>
               </Select>
               <p className="text-xs text-muted-foreground">
-                You can also use &quot;Use for extensions&quot; on the Sessions page.
+                You can also use &quot;Use proxy for extensions&quot; on the Sessions page.
               </p>
             </div>
           )}
 
+          {source === 'custom' && (
+            <div className="space-y-4 rounded-lg border border-border bg-muted/20 p-4">
+              <div className="flex items-center gap-2 text-sm font-medium text-foreground">
+                <Pencil className="h-4 w-4" />
+                Custom proxy details
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <label className="text-sm text-foreground">Host</label>
+                  <Input
+                    placeholder="proxy.example.com"
+                    value={customHost}
+                    onChange={(e) => setCustomHost(e.target.value)}
+                    className="bg-background font-mono text-sm"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-sm text-foreground">Port</label>
+                  <Input
+                    type="number"
+                    placeholder="8080"
+                    value={customPort}
+                    onChange={(e) => setCustomPort(e.target.value)}
+                    className="bg-background font-mono text-sm"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-sm text-foreground">Username</label>
+                  <Input
+                    placeholder="Optional"
+                    value={customUsername}
+                    onChange={(e) => setCustomUsername(e.target.value)}
+                    className="bg-background font-mono text-sm"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-sm text-foreground">Password</label>
+                  <Input
+                    type="password"
+                    placeholder="Optional"
+                    value={customPassword}
+                    onChange={(e) => setCustomPassword(e.target.value)}
+                    className="bg-background font-mono text-sm"
+                  />
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Format matches sessions: host:port:username:password. Save stores these details in
+                the database for extension use.
+              </p>
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={handleSaveCustomOnly}
+                disabled={saving || !customValid}
+              >
+                Save custom details only
+              </Button>
+            </div>
+          )}
+
           <div className="flex flex-wrap gap-3 pt-2">
-            <Button onClick={handleSave} disabled={saving || (source === 'session' && !sessionId)}>
+            <Button onClick={handleSave} disabled={saveDisabled}>
               {saving ? (
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
               ) : (
                 <Save className="h-4 w-4 mr-2" />
               )}
-              Save
+              Save & apply
             </Button>
             {source !== 'env' && (
               <Button variant="outline" onClick={handleUseEnv} disabled={saving}>

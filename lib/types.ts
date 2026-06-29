@@ -296,13 +296,20 @@ export interface SalespersonWithCommission {
 
 export interface ExtensionProxyAdminConfig {
   enabled: boolean;
-  source: 'env' | 'session';
+  source: 'env' | 'session' | 'custom';
   sessionId: string | null;
   session: {
     _id: string;
     name: string;
     proxyPreview: string;
   } | null;
+  custom: {
+    host: string;
+    port: number;
+    username: string;
+    password: string;
+    configured: boolean;
+  };
   env: {
     host: string;
     port: number;
@@ -311,7 +318,7 @@ export interface ExtensionProxyAdminConfig {
     configured: boolean;
   };
   active: {
-    source: 'env' | 'session';
+    source: 'env' | 'session' | 'custom';
     host: string;
     port: number;
     username: string;
