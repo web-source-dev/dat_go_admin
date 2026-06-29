@@ -120,8 +120,9 @@ export const extensionProxyApi = {
 
   updateConfig: async (payload: {
     enabled?: boolean;
-    source?: 'env' | 'session' | 'custom';
+    source?: 'env' | 'session' | 'custom' | 'proxyPool';
     sessionId?: string | null;
+    proxyIpId?: string | null;
     customProxy?: {
       host?: string;
       port?: number | string;
@@ -135,6 +136,11 @@ export const extensionProxyApi = {
 
   useSession: async (sessionId: string) => {
     const response = await api.post(`/proxy/admin/use-session/${sessionId}`);
+    return response.data as import('./types').ExtensionProxyAdminConfig & { message?: string };
+  },
+
+  useProxyIp: async (proxyIpId: string) => {
+    const response = await api.post(`/proxy/admin/use-proxy-ip/${proxyIpId}`);
     return response.data as import('./types').ExtensionProxyAdminConfig & { message?: string };
   },
 };

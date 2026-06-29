@@ -294,15 +294,29 @@ export interface SalespersonWithCommission {
   lastPayment: string | null;
 }
 
+export interface ExtensionProxyPoolItem {
+  _id: string;
+  container: string;
+  host: string;
+  port: number;
+  username: string;
+  providerName: string;
+  isActive: boolean;
+  proxyPreview: string;
+}
+
 export interface ExtensionProxyAdminConfig {
   enabled: boolean;
-  source: 'env' | 'session' | 'custom';
+  source: 'env' | 'session' | 'custom' | 'proxyPool';
   sessionId: string | null;
+  proxyIpId: string | null;
   session: {
     _id: string;
     name: string;
     proxyPreview: string;
   } | null;
+  proxyIp: ExtensionProxyPoolItem | null;
+  availableProxies: ExtensionProxyPoolItem[];
   custom: {
     host: string;
     port: number;
@@ -318,7 +332,7 @@ export interface ExtensionProxyAdminConfig {
     configured: boolean;
   };
   active: {
-    source: 'env' | 'session' | 'custom';
+    source: 'env' | 'session' | 'custom' | 'proxyPool';
     host: string;
     port: number;
     username: string;

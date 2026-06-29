@@ -1,13 +1,15 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   CheckCircle2,
+  Database,
   Globe,
   Loader2,
   Pencil,
   RefreshCw,
   Save,
+  Search,
   Server,
   Shield,
   Wrench,
@@ -24,7 +26,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { extensionProxyApi, sessionsApi } from '@/lib/api';
-import type { ExtensionProxyAdminConfig, Session } from '@/lib/types';
+import type { ExtensionProxyAdminConfig, ExtensionProxyPoolItem, Session } from '@/lib/types';
 
 function maskProxyPreview(proxy: string) {
   if (!proxy) return '—';
@@ -33,7 +35,7 @@ function maskProxyPreview(proxy: string) {
   return `${parts[0]}:${parts[1]}`;
 }
 
-type ProxySource = 'env' | 'session' | 'custom';
+type ProxySource = 'env' | 'session' | 'custom' | 'proxyPool';
 
 export default function ExtensionProxyPage() {
   const [config, setConfig] = useState<ExtensionProxyAdminConfig | null>(null);
@@ -41,6 +43,8 @@ export default function ExtensionProxyPage() {
   const [enabled, setEnabled] = useState(true);
   const [source, setSource] = useState<ProxySource>('env');
   const [sessionId, setSessionId] = useState<string>('');
+  const [proxyIpId, setProxyIpId] = useState<string>('');
+  const [poolSearch, setPoolSearch] = useState('');
   const [customHost, setCustomHost] = useState('');
   const [customPort, setCustomPort] = useState('');
   const [customUsername, setCustomUsername] = useState('');
@@ -53,6 +57,7 @@ export default function ExtensionProxyPage() {
     setEnabled(data.enabled);
     setSource(data.source);
     setSessionId(data.sessionId || '');
+    setProxyIpId(data.proxyIpId || '');
     setCustomHost(data.custom?.host || '');
     setCustomPort(data.custom?.port ? String(data.custom.port) : '');
     setCustomUsername(data.custom?.username || '');
@@ -81,11 +86,32 @@ export default function ExtensionProxyPage() {
     loadData();
   }, [loadData]);
 
+  const availableProxies = config?.availableProxies || [];
+
+  const filteredProxies = useMemo(() => {
+    const q = poolSearch.trim().toLowerCase();
+    if (!q) return availableProxies;
+    return availableProxies.filter((p) => {
+      const haystack = [
+        p.container,
+        p.host,
+        String(p.port),
+        p.username,
+        p.providerName,
+        p.proxyPreview,
+      ]
+        .join(' ')
+        .toLowerCase();
+      return haystack.includes(q);
+    });
+  }, [availableProxies, poolSearch]);
+
   const buildPayload = () => {
     const payload: Parameters<typeof extensionProxyApi.updateConfig>[0] = {
       enabled,
       source,
       sessionId: source === 'session' ? sessionId || null : null,
+      proxyIpId: source === 'proxyPool' ? proxyIpId || null : null,
     };
 
     if (source === 'custom' || customHost || customPort || customUsername || customPassword) {
@@ -133,6 +159,19 @@ export default function ExtensionProxyPage() {
     }
   };
 
+  const handleUseProxyIp = async (proxy: ExtensionProxyPoolItem) => {
+    setSaving(true);
+    try {
+      const data = await extensionProxyApi.useProxyIp(proxy._id);
+      applyConfig(data);
+      toast.success(`Extensions now use container ${proxy.container} (${proxy.host}:${proxy.port})`);
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || err.message || 'Failed to apply proxy');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const handleUseEnv = async () => {
     setSaving(true);
     try {
@@ -140,6 +179,7 @@ export default function ExtensionProxyPage() {
         enabled: true,
         source: 'env',
         sessionId: null,
+        proxyIpId: null,
       });
       applyConfig(data);
       toast.success('Extensions now use the server .env proxy');
@@ -154,7 +194,8 @@ export default function ExtensionProxyPage() {
   const saveDisabled =
     saving ||
     (source === 'session' && !sessionId) ||
-    (source === 'custom' && !customValid);
+    (source === 'custom' && !customValid) ||
+    (source === 'proxyPool' && !proxyIpId);
 
   if (loading) {
     return (
@@ -187,17 +228,18 @@ export default function ExtensionProxyPage() {
         </div>
       </div>
 
-      <div className="px-8 py-6 space-y-6 max-w-4xl">
+      <div className="px-8 py-6 space-y-6 max-w-6xl">
         {active?.enabled && !active.error && (
           <div className="flex items-start gap-3 rounded-lg border border-green-500/30 bg-green-500/10 px-4 py-3">
             <CheckCircle2 className="h-5 w-5 text-green-600 shrink-0 mt-0.5" />
             <div>
               <p className="font-medium text-foreground">Active for extensions</p>
               <p className="text-sm text-muted-foreground mt-0.5">
-                Source: <span className="capitalize">{active.source}</span>
+                Source: <span className="capitalize">{active.source === 'proxyPool' ? 'proxy pool' : active.source}</span>
                 {' · '}
                 {active.host}:{active.port}
                 {active.username ? ` · ${active.username}` : ''}
+                {config?.proxyIp?.container ? ` · container ${config.proxyIp.container}` : ''}
               </p>
             </div>
           </div>
@@ -222,7 +264,7 @@ export default function ExtensionProxyPage() {
 
           <div className="space-y-3">
             <p className="font-medium text-foreground">Proxy source</p>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
               <button
                 type="button"
                 onClick={() => setSource('env')}
@@ -236,12 +278,33 @@ export default function ExtensionProxyPage() {
                   <Server className="h-4 w-4" />
                   Server .env
                 </div>
-                <p className="text-xs text-muted-foreground mt-2">
-                  PROXY_* variables from backend .env
-                </p>
+                <p className="text-xs text-muted-foreground mt-2">PROXY_* from backend .env</p>
                 {config?.env.configured && (
                   <p className="text-xs font-mono mt-2 text-foreground">
                     {config.env.host}:{config.env.port}
+                  </p>
+                )}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setSource('proxyPool')}
+                className={`text-left rounded-lg border p-4 transition-colors ${
+                  source === 'proxyPool'
+                    ? 'border-primary bg-primary/5 ring-1 ring-primary'
+                    : 'border-border hover:bg-muted/50'
+                }`}
+              >
+                <div className="flex items-center gap-2 font-medium">
+                  <Database className="h-4 w-4" />
+                  Proxy pool
+                </div>
+                <p className="text-xs text-muted-foreground mt-2">
+                  {availableProxies.length} imported proxies
+                </p>
+                {config?.proxyIp && (
+                  <p className="text-xs font-mono mt-2 text-foreground">
+                    {config.proxyIp.container} · {config.proxyIp.proxyPreview}
                   </p>
                 )}
               </button>
@@ -259,9 +322,7 @@ export default function ExtensionProxyPage() {
                   <Shield className="h-4 w-4" />
                   DAT session
                 </div>
-                <p className="text-xs text-muted-foreground mt-2">
-                  Proxy from a DAT session record
-                </p>
+                <p className="text-xs text-muted-foreground mt-2">Proxy from a DAT session</p>
               </button>
 
               <button
@@ -277,9 +338,7 @@ export default function ExtensionProxyPage() {
                   <Wrench className="h-4 w-4" />
                   Custom proxy
                 </div>
-                <p className="text-xs text-muted-foreground mt-2">
-                  Manually enter host, port, and credentials
-                </p>
+                <p className="text-xs text-muted-foreground mt-2">Manually entered credentials</p>
                 {config?.custom?.configured && (
                   <p className="text-xs font-mono mt-2 text-foreground">
                     {config.custom.host}:{config.custom.port}
@@ -288,6 +347,25 @@ export default function ExtensionProxyPage() {
               </button>
             </div>
           </div>
+
+          {source === 'proxyPool' && (
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-foreground">Selected pool proxy</label>
+              <Select value={proxyIpId} onValueChange={setProxyIpId}>
+                <SelectTrigger className="bg-background">
+                  <SelectValue placeholder="Select a proxy from the pool…" />
+                </SelectTrigger>
+                <SelectContent>
+                  {availableProxies.map((p) => (
+                    <SelectItem key={p._id} value={p._id} disabled={!p.isActive}>
+                      {p.container} — {p.host}:{p.port}
+                      {!p.isActive ? ' (inactive)' : ''}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
 
           {source === 'session' && (
             <div className="space-y-2">
@@ -304,9 +382,6 @@ export default function ExtensionProxyPage() {
                   ))}
                 </SelectContent>
               </Select>
-              <p className="text-xs text-muted-foreground">
-                You can also use &quot;Use proxy for extensions&quot; on the Sessions page.
-              </p>
             </div>
           )}
 
@@ -356,10 +431,6 @@ export default function ExtensionProxyPage() {
                   />
                 </div>
               </div>
-              <p className="text-xs text-muted-foreground">
-                Format matches sessions: host:port:username:password. Save stores these details in
-                the database for extension use.
-              </p>
               <Button
                 type="button"
                 variant="secondary"
@@ -387,6 +458,102 @@ export default function ExtensionProxyPage() {
               </Button>
             )}
           </div>
+        </div>
+
+        <div className="rounded-lg border border-border bg-card overflow-hidden">
+          <div className="px-6 py-4 border-b border-border flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div>
+              <h2 className="font-semibold text-foreground flex items-center gap-2">
+                <Database className="h-5 w-5 text-primary" />
+                Imported proxy pool
+              </h2>
+              <p className="text-sm text-muted-foreground mt-1">
+                {availableProxies.length} proxies in database — click Use to apply immediately
+              </p>
+            </div>
+            <div className="relative w-full sm:w-64">
+              <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search container, host…"
+                value={poolSearch}
+                onChange={(e) => setPoolSearch(e.target.value)}
+                className="pl-9 bg-background"
+              />
+            </div>
+          </div>
+
+          {availableProxies.length === 0 ? (
+            <div className="px-6 py-10 text-center text-muted-foreground text-sm">
+              No proxies in the database. Run{' '}
+              <code className="text-xs bg-muted px-1 rounded">npm run proxies:import</code> in the
+              backend folder.
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-border bg-muted/40 text-left">
+                    <th className="px-4 py-3 font-medium text-muted-foreground">Container</th>
+                    <th className="px-4 py-3 font-medium text-muted-foreground">Host:Port</th>
+                    <th className="px-4 py-3 font-medium text-muted-foreground">Username</th>
+                    <th className="px-4 py-3 font-medium text-muted-foreground">Provider</th>
+                    <th className="px-4 py-3 font-medium text-muted-foreground">Status</th>
+                    <th className="px-4 py-3 font-medium text-muted-foreground text-right">Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredProxies.map((proxy) => {
+                    const isActive =
+                      config?.source === 'proxyPool' && config.proxyIpId === proxy._id;
+                    return (
+                      <tr
+                        key={proxy._id}
+                        className={`border-b border-border last:border-0 ${
+                          isActive ? 'bg-primary/5' : 'hover:bg-muted/30'
+                        }`}
+                      >
+                        <td className="px-4 py-3 font-mono font-semibold">{proxy.container}</td>
+                        <td className="px-4 py-3 font-mono text-xs">
+                          {proxy.host}:{proxy.port}
+                        </td>
+                        <td className="px-4 py-3 font-mono text-xs text-muted-foreground">
+                          {proxy.username || '—'}
+                        </td>
+                        <td className="px-4 py-3 text-muted-foreground">{proxy.providerName || '—'}</td>
+                        <td className="px-4 py-3">
+                          {isActive ? (
+                            <span className="inline-flex items-center gap-1 text-xs font-medium text-primary">
+                              <CheckCircle2 className="h-3.5 w-3.5" />
+                              Active
+                            </span>
+                          ) : proxy.isActive ? (
+                            <span className="text-xs text-green-600">Available</span>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">Inactive</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          <Button
+                            size="sm"
+                            variant={isActive ? 'secondary' : 'default'}
+                            disabled={saving || !proxy.isActive || isActive}
+                            onClick={() => handleUseProxyIp(proxy)}
+                          >
+                            {isActive ? 'In use' : 'Use for extensions'}
+                          </Button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+              {filteredProxies.length === 0 && (
+                <div className="px-6 py-8 text-center text-muted-foreground text-sm">
+                  No proxies match your search.
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </div>
