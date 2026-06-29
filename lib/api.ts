@@ -111,6 +111,28 @@ export const sessionsApi = {
 
 };
 
+// Extension proxy API (Chrome / Swift extensions)
+export const extensionProxyApi = {
+  getConfig: async () => {
+    const response = await api.get('/proxy/admin/config');
+    return response.data as import('./types').ExtensionProxyAdminConfig;
+  },
+
+  updateConfig: async (payload: {
+    enabled?: boolean;
+    source?: 'env' | 'session';
+    sessionId?: string | null;
+  }) => {
+    const response = await api.put('/proxy/admin/config', payload);
+    return response.data as import('./types').ExtensionProxyAdminConfig & { message?: string };
+  },
+
+  useSession: async (sessionId: string) => {
+    const response = await api.post(`/proxy/admin/use-session/${sessionId}`);
+    return response.data as import('./types').ExtensionProxyAdminConfig & { message?: string };
+  },
+};
+
 // Payments API
 export const paymentsApi = {
   getAll: async (params?: { page?: number; limit?: number; userId?: string; status?: string; month?: number; year?: number }) => {

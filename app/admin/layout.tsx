@@ -4,13 +4,14 @@ import React, { useEffect } from "react"
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Users, Lock, Settings, LogOut, Cookie, MessageSquare, Clock, Users as UsersIcon, LayoutGrid, Boxes, Download } from 'lucide-react';
+import { Users, Lock, Settings, LogOut, Cookie, MessageSquare, Clock, Users as UsersIcon, LayoutGrid, Boxes, Download, Globe } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
 import { Toaster } from '@/components/ui/sonner';
 
 const navigation = [
   { name: 'Users', href: '/admin/users', icon: Users },
   { name: 'Sessions', href: '/admin/sessions', icon: Settings },
+  { name: 'Extension Proxy', href: '/admin/extension-proxy', icon: Globe },
   { name: 'Cookies', href: '/admin/cookies', icon: Cookie },
   { name: 'FD Containers', href: '/admin/freightdesk-sessions', icon: Boxes },
   { name: 'Swift Partner', href: '/admin/swift-partner-accounts', icon: LayoutGrid },

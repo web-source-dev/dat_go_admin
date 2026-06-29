@@ -5,7 +5,7 @@ import Loading from './loading';
 import { useEffect } from 'react';
 
 import { useState } from 'react';
-import { Search, Plus, MoreVertical, AlertCircle, CheckCircle, X } from 'lucide-react';
+import { Search, Plus, MoreVertical, AlertCircle, CheckCircle, X, Globe } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -22,7 +22,8 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Suspense } from 'react';
-import { sessionsApi } from '@/lib/api';
+import { sessionsApi, extensionProxyApi } from '@/lib/api';
+import { toast } from 'sonner';
 import { getCookieLabelDisplay, CookieLabel } from '@/lib/cookieLabels';
 import { DataPagination } from '@/components/admin/data-pagination';
 import { useDebounce } from '@/hooks/use-debounce';
@@ -55,6 +56,7 @@ export default function SessionsPage() {
   const [userCountFilter, setUserCountFilter] = useState<'all' | 'has-users' | 'no-users'>('all');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
+  const [extensionProxySessionId, setExtensionProxySessionId] = useState<string | null>(null);
   const searchParams = useSearchParams();
   const itemsPerPage = 10;
   const debouncedSearchTerm = useDebounce(searchTerm, 500);
@@ -62,6 +64,16 @@ export default function SessionsPage() {
   useEffect(() => {
     fetchSessions();
   }, [currentPage, debouncedSearchTerm, statusFilter, userCountFilter, dateFrom, dateTo]);
+
+  useEffect(() => {
+    extensionProxyApi.getConfig().then((data) => {
+      if (data.source === 'session' && data.sessionId) {
+        setExtensionProxySessionId(data.sessionId);
+      } else {
+        setExtensionProxySessionId(null);
+      }
+    }).catch(() => {});
+  }, []);
 
   const fetchSessions = async () => {
     try {
@@ -151,9 +163,21 @@ export default function SessionsPage() {
     return isLoggedIn ? 'text-green-400' : 'text-gray-400';
   };
 
-  const maskProxy = () => {
-    // Proxy format: host:port:username:password
-    return `***********************`;
+  const maskProxy = (proxy: string) => {
+    if (!proxy) return '—';
+    const parts = proxy.split(':');
+    if (parts.length < 2) return '***';
+    return `${parts[0]}:${parts[1]} · ***`;
+  };
+
+  const handleUseForExtensions = async (session: Session) => {
+    try {
+      const data = await extensionProxyApi.useSession(session._id);
+      setExtensionProxySessionId(data.sessionId);
+      toast.success(`Extensions now use proxy from "${session.name}"`);
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || err.message || 'Failed to set extension proxy');
+    }
   };
 
   if (loading) {
@@ -333,7 +357,15 @@ export default function SessionsPage() {
                         {session.name}
                       </td>
                       <td className="px-6 py-4 text-sm text-muted-foreground font-mono text-xs">
-                        {maskProxy()}
+                        <div className="flex items-center gap-2">
+                          {maskProxy(session.proxy)}
+                          {extensionProxySessionId === session._id && (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-primary/10 text-primary">
+                              <Globe size={10} />
+                              Extensions
+                            </span>
+                          )}
+                        </div>
                       </td>
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-2">
@@ -382,6 +414,12 @@ export default function SessionsPage() {
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end" className="w-48 bg-card border-border">
                               <DropdownMenuItem
+                              onClick={() => handleUseForExtensions(session)}
+                              className="cursor-pointer text-foreground hover:bg-muted"
+                            >
+                              Use proxy for extensions
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
                               onClick={() => handleEditSession(session)}
                               className="cursor-pointer text-foreground hover:bg-muted"
                             >

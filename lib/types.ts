@@ -293,3 +293,30 @@ export interface SalespersonWithCommission {
   userCount: number;
   lastPayment: string | null;
 }
+
+export interface ExtensionProxyAdminConfig {
+  enabled: boolean;
+  source: 'env' | 'session';
+  sessionId: string | null;
+  session: {
+    _id: string;
+    name: string;
+    proxyPreview: string;
+  } | null;
+  env: {
+    host: string;
+    port: number;
+    username: string;
+    enabled: boolean;
+    configured: boolean;
+  };
+  active: {
+    source: 'env' | 'session';
+    host: string;
+    port: number;
+    username: string;
+    enabled: boolean;
+    error: string | null;
+  };
+  message?: string;
+}
