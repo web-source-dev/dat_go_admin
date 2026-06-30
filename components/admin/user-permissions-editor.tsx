@@ -54,6 +54,7 @@ interface UserPermissions {
   desktop: boolean;
   mobile: boolean;
   extension: boolean;
+  extensionProxy: boolean;
 }
 
 interface User {
@@ -109,6 +110,7 @@ export function UserPermissionsEditor({ user, onSave, onCancel }: UserPermission
     desktop: user.permissions?.desktop !== false, // Default to true
     mobile: user.permissions?.mobile !== false, // Default to true
     extension: user.permissions?.extension !== false, // Default to true
+    extensionProxy: user.permissions?.extensionProxy !== false, // Default to true
   });
   const { toast } = useToast();
 
@@ -353,6 +355,24 @@ export function UserPermissionsEditor({ user, onSave, onCancel }: UserPermission
                 />
               </div>
             ))}
+          </div>
+          <div className="mt-2 bg-muted/30 p-2 rounded border border-border/50">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <Label htmlFor="extensionProxy" className="text-xs font-semibold text-foreground cursor-pointer">
+                  Extension proxy
+                </Label>
+                <p className="text-[10px] text-muted-foreground mt-0.5">
+                  When off, this user&apos;s extension won&apos;t use the server proxy (they can use their own VPN).
+                </p>
+              </div>
+              <Switch
+                id="extensionProxy"
+                checked={permissions.extensionProxy}
+                onCheckedChange={(checked) => updatePermission('extensionProxy', checked)}
+                className="scale-75"
+              />
+            </div>
           </div>
         </div>
 

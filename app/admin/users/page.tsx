@@ -5,6 +5,8 @@ import { useSearchParams } from "next/navigation"
 import { Suspense, useEffect } from 'react';
 import { useState } from 'react';
 import { Search, Plus, MoreVertical, Shield, Ban, Edit, AlertCircle, ChevronDown, ChevronRight, X, Coins } from 'lucide-react';
+import { Switch } from '@/components/ui/switch';
+import { useToast } from '@/hooks/use-toast';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -60,7 +62,9 @@ export default function UsersPage() {
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [pendingPaymentsInfo, setPendingPaymentsInfo] = useState<{ count: number; amount: number } | null>(null);
+  const [proxyToggleLoading, setProxyToggleLoading] = useState<Set<string>>(new Set());
   const searchParams = useSearchParams();
+  const { toast } = useToast();
   const itemsPerPage = 10;
   const debouncedSearchTerm = useDebounce(searchTerm, 500);
 
@@ -183,6 +187,39 @@ export default function UsersPage() {
 
   const handleUserUpdated = (updatedUser: User) => {
     setUsers(prev => prev.map(user => user._id === updatedUser._id ? updatedUser : user));
+  };
+
+  const handleExtensionProxyToggle = async (user: User, enabled: boolean) => {
+    setProxyToggleLoading((prev) => new Set(prev).add(user._id));
+    try {
+      const response = await usersApi.update(user._id, {
+        permissions: { extensionProxy: enabled },
+      });
+      const updatedUser: User = {
+        ...user,
+        permissions: response.permissions || {
+          ...user.permissions,
+          extensionProxy: enabled,
+        },
+      };
+      handleUserUpdated(updatedUser);
+      toast({
+        title: enabled ? 'Extension proxy enabled' : 'Extension proxy disabled',
+        description: `${user.name} will ${enabled ? 'use' : 'not use'} the server proxy.`,
+      });
+    } catch (err: any) {
+      toast({
+        title: 'Error',
+        description: err.response?.data?.message || 'Failed to update extension proxy',
+        variant: 'destructive',
+      });
+    } finally {
+      setProxyToggleLoading((prev) => {
+        const next = new Set(prev);
+        next.delete(user._id);
+        return next;
+      });
+    }
   };
 
 
@@ -430,6 +467,9 @@ export default function UsersPage() {
                     <th className="px-6 py-3 text-left text-sm font-semibold text-muted-foreground">
                       Status
                     </th>
+                    <th className="px-6 py-3 text-left text-sm font-semibold text-muted-foreground" title="Per-user extension proxy (server VPN)">
+                      Ext. Proxy
+                    </th>
                     <th className="px-6 py-3 text-left text-sm font-semibold text-muted-foreground">
                       Plan
                     </th>
@@ -501,6 +541,22 @@ export default function UsersPage() {
                                 )}
                               </span>
                             )}
+                          </div>
+                        </td>
+                        <td
+                          className="px-6 py-4"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <div className="flex items-center gap-2">
+                            <Switch
+                              checked={user.permissions?.extensionProxy !== false}
+                              disabled={proxyToggleLoading.has(user._id)}
+                              onCheckedChange={(checked) => handleExtensionProxyToggle(user, checked)}
+                              aria-label={`Extension proxy for ${user.name}`}
+                            />
+                            <span className="text-[10px] text-muted-foreground whitespace-nowrap">
+                              {user.permissions?.extensionProxy === false ? 'Off' : 'On'}
+                            </span>
                           </div>
                         </td>
                         <td className="px-6 py-4">
@@ -641,7 +697,7 @@ export default function UsersPage() {
                       </tr>
                       {expandedRows.has(user._id) && (
                         <tr>
-                          <td colSpan={12} className="px-6 py-4">
+                          <td colSpan={13} className="px-6 py-4">
                             <div className="space-y-4">
                               {/* Tab Buttons */}
                               <div className="flex gap-2">
