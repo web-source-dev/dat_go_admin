@@ -30,6 +30,7 @@ export interface UserPermissions {
   desktop: boolean;
   mobile: boolean;
   extension: boolean;
+  extensionProxy?: boolean;
 }
 
 export interface User {
@@ -317,6 +318,11 @@ export interface ExtensionProxyAdminConfig {
   } | null;
   proxyIp: ExtensionProxyPoolItem | null;
   availableProxies: ExtensionProxyPoolItem[];
+  productEnabled: {
+    datGo: boolean;
+    swiftSolutions: boolean;
+    datHub: boolean;
+  };
   custom: {
     host: string;
     port: number;

@@ -12,6 +12,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
 import {
   Select,
   SelectContent,
@@ -49,6 +50,7 @@ export function EditUserDialog({ open, onClose, onSuccess, onRefresh, user }: Ed
     note: '',
     isTrial: false,
     trialDurationHours: '1',
+    extensionProxy: true,
   });
   const [availableLabels, setAvailableLabels] = useState<string[]>([]);
   const { toast } = useToast();
@@ -86,6 +88,7 @@ export function EditUserDialog({ open, onClose, onSuccess, onRefresh, user }: Ed
         note: user.note || '',
         isTrial: user.isTrial || false,
         trialDurationHours: user.trialDurationHours?.toString() || '1',
+        extensionProxy: user.permissions?.extensionProxy !== false,
       });
     }
   }, [user]);
@@ -137,6 +140,14 @@ export function EditUserDialog({ open, onClose, onSuccess, onRefresh, user }: Ed
       if (formData.dataSessionId !== (user.permissions?.dataSessionId || '')) {
         userUpdateData.permissions = {
           dataSessionId: formData.dataSessionId || undefined,
+        };
+      }
+
+      const currentExtensionProxy = user.permissions?.extensionProxy !== false;
+      if (formData.extensionProxy !== currentExtensionProxy || userUpdateData.permissions) {
+        userUpdateData.permissions = {
+          ...(userUpdateData.permissions || {}),
+          extensionProxy: formData.extensionProxy,
         };
       }
 
@@ -353,6 +364,22 @@ export function EditUserDialog({ open, onClose, onSuccess, onRefresh, user }: Ed
                 <p className="text-xs text-muted-foreground">
                   Additional information about the user
                 </p>
+              </div>
+
+              <div className="space-y-2 border-t pt-4">
+                <div className="flex items-center justify-between gap-4">
+                  <div>
+                    <Label htmlFor="extensionProxy" className="font-medium">Extension proxy</Label>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      When off, this user&apos;s extension will not use the server proxy (they can use their own VPN).
+                    </p>
+                  </div>
+                  <Switch
+                    id="extensionProxy"
+                    checked={formData.extensionProxy}
+                    onCheckedChange={(checked) => setFormData({ ...formData, extensionProxy: checked })}
+                  />
+                </div>
               </div>
 
               <div className="space-y-2 border-t pt-4 mt-4">

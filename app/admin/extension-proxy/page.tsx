@@ -49,6 +49,9 @@ export default function ExtensionProxyPage() {
   const [customPort, setCustomPort] = useState('');
   const [customUsername, setCustomUsername] = useState('');
   const [customPassword, setCustomPassword] = useState('');
+  const [productDatGo, setProductDatGo] = useState(true);
+  const [productSwift, setProductSwift] = useState(true);
+  const [productDatHub, setProductDatHub] = useState(true);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -62,6 +65,9 @@ export default function ExtensionProxyPage() {
     setCustomPort(data.custom?.port ? String(data.custom.port) : '');
     setCustomUsername(data.custom?.username || '');
     setCustomPassword(data.custom?.password || '');
+    setProductDatGo(data.productEnabled?.datGo !== false);
+    setProductSwift(data.productEnabled?.swiftSolutions !== false);
+    setProductDatHub(data.productEnabled?.datHub !== false);
   };
 
   const loadData = useCallback(async () => {
@@ -112,6 +118,11 @@ export default function ExtensionProxyPage() {
       source,
       sessionId: source === 'session' ? sessionId || null : null,
       proxyIpId: source === 'proxyPool' ? proxyIpId || null : null,
+      productEnabled: {
+        datGo: productDatGo,
+        swiftSolutions: productSwift,
+        datHub: productDatHub,
+      },
     };
 
     if (source === 'custom' || customHost || customPort || customUsername || customPassword) {
@@ -256,10 +267,40 @@ export default function ExtensionProxyPage() {
             <div>
               <p className="font-medium text-foreground">Enable proxy for extensions</p>
               <p className="text-sm text-muted-foreground">
-                When off, extensions receive <code className="text-xs">enabled: false</code>
+                Master switch — when off, all extensions receive <code className="text-xs">enabled: false</code>
               </p>
             </div>
             <Switch checked={enabled} onCheckedChange={setEnabled} />
+          </div>
+
+          <div className="space-y-3 rounded-lg border border-border bg-muted/20 p-4">
+            <p className="font-medium text-foreground">Proxy by extension product</p>
+            <p className="text-sm text-muted-foreground">
+              Turn off proxy for every user on that extension build (independent of per-user settings below).
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="flex items-center justify-between gap-3 rounded-lg border border-border bg-card px-4 py-3">
+                <div>
+                  <p className="text-sm font-medium">DAT GO</p>
+                  <p className="text-xs text-muted-foreground">dat-go extension</p>
+                </div>
+                <Switch checked={productDatGo} onCheckedChange={setProductDatGo} />
+              </div>
+              <div className="flex items-center justify-between gap-3 rounded-lg border border-border bg-card px-4 py-3">
+                <div>
+                  <p className="text-sm font-medium">Swift Solutions</p>
+                  <p className="text-xs text-muted-foreground">swift-solutions extension</p>
+                </div>
+                <Switch checked={productSwift} onCheckedChange={setProductSwift} />
+              </div>
+              <div className="flex items-center justify-between gap-3 rounded-lg border border-border bg-card px-4 py-3">
+                <div>
+                  <p className="text-sm font-medium">DAT Hub</p>
+                  <p className="text-xs text-muted-foreground">dat-hub extension</p>
+                </div>
+                <Switch checked={productDatHub} onCheckedChange={setProductDatHub} />
+              </div>
+            </div>
           </div>
 
           <div className="space-y-3">

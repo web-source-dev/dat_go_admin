@@ -123,6 +123,11 @@ export const extensionProxyApi = {
     source?: 'env' | 'session' | 'custom' | 'proxyPool';
     sessionId?: string | null;
     proxyIpId?: string | null;
+    productEnabled?: {
+      datGo?: boolean;
+      swiftSolutions?: boolean;
+      datHub?: boolean;
+    };
     customProxy?: {
       host?: string;
       port?: number | string;
