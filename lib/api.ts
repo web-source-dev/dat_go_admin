@@ -425,6 +425,23 @@ export const schedulerApi = {
     const response = await api.post('/scheduler/trigger/freightdesk', undefined, at(baseURL));
     return response.data;
   },
+
+  getSyncOptions: async (baseURL?: string) => {
+    const response = await api.get('/scheduler/sync-options', at(baseURL));
+    return response.data as { success: boolean; data: import('./types').SchedulerSyncOptions };
+  },
+
+  updateSyncOptions: async (
+    payload: Partial<import('./types').SchedulerSyncOptions>,
+    baseURL?: string
+  ) => {
+    const response = await api.put('/scheduler/sync-options', payload, at(baseURL));
+    return response.data as {
+      success: boolean;
+      message?: string;
+      data: import('./types').SchedulerSyncOptions;
+    };
+  },
 };
 
 // App auto-update on/off (per app). Stored in the shared backend DB, so a single

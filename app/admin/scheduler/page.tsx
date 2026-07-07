@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
+import { Switch } from '@/components/ui/switch';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -26,6 +27,11 @@ interface SchedulerStatus {
   nextRunPST: string | null;
   backupScheduled?: boolean;
   nextBackupRun?: string | null;
+}
+
+interface SchedulerSyncOptions {
+  autoAssignUserSessionsOnSync: boolean;
+  autoUpdateSessionProxiesOnSync: boolean;
 }
 
 // Which backend(s) a trigger runs against. 'all' fans out to every backend.
@@ -71,6 +77,8 @@ export default function SchedulerPage() {
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [target, setTarget] = useState<TargetKey>('primary');
+  const [syncOptions, setSyncOptions] = useState<SchedulerSyncOptions | null>(null);
+  const [syncOptionsLoading, setSyncOptionsLoading] = useState(false);
   // The trigger awaiting confirmation in the dialog (null = no dialog open).
   const [pendingAction, setPendingAction] = useState<{ action: string; name: string } | null>(null);
 
@@ -82,16 +90,36 @@ export default function SchedulerPage() {
 
   const fetchStatus = useCallback(async () => {
     try {
-      const response = await schedulerApi.getStatus(statusBackend.url);
-      setStatus(response.data);
+      const [statusResponse, optionsResponse] = await Promise.all([
+        schedulerApi.getStatus(statusBackend.url),
+        schedulerApi.getSyncOptions(statusBackend.url),
+      ]);
+      setStatus(statusResponse.data);
+      setSyncOptions(optionsResponse.data);
     } catch (error) {
       console.error('Error fetching scheduler status:', error);
       setStatus(null);
+      setSyncOptions(null);
       toast.error(`Failed to fetch status from ${statusBackend.label}`);
     } finally {
       setLoading(false);
     }
   }, [statusBackend.url, statusBackend.label]);
+
+  const updateSyncOptions = async (patch: Partial<SchedulerSyncOptions>) => {
+    try {
+      setSyncOptionsLoading(true);
+      const response = await schedulerApi.updateSyncOptions(patch, statusBackend.url);
+      setSyncOptions(response.data);
+      toast.success('Sync settings updated');
+    } catch (error: any) {
+      toast.error('Failed to update sync settings', {
+        description: error?.response?.data?.message || error?.message || 'Request failed',
+      });
+    } finally {
+      setSyncOptionsLoading(false);
+    }
+  };
 
   useEffect(() => {
     fetchStatus();
@@ -302,6 +330,49 @@ export default function SchedulerPage() {
           >
             Refresh Status
           </Button>
+        </CardContent>
+      </Card>
+
+      {/* Session sync behavior */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Session Sync Behavior</CardTitle>
+          <CardDescription>
+            Control whether sync automatically reassigns user sessions and overwrites proxies from external API.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-5">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-medium">Auto-assign users to another session on sync</p>
+              <p className="text-xs text-muted-foreground">
+                When OFF, assigned users keep their current session mapping (no automatic reassignment).
+              </p>
+            </div>
+            <Switch
+              checked={Boolean(syncOptions?.autoAssignUserSessionsOnSync)}
+              disabled={syncOptionsLoading || !syncOptions}
+              onCheckedChange={(checked) =>
+                updateSyncOptions({ autoAssignUserSessionsOnSync: checked })
+              }
+            />
+          </div>
+
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-medium">Auto-update session proxies from external sync</p>
+              <p className="text-xs text-muted-foreground">
+                Turn OFF to keep manually edited proxy values unchanged during sync.
+              </p>
+            </div>
+            <Switch
+              checked={Boolean(syncOptions?.autoUpdateSessionProxiesOnSync)}
+              disabled={syncOptionsLoading || !syncOptions}
+              onCheckedChange={(checked) =>
+                updateSyncOptions({ autoUpdateSessionProxiesOnSync: checked })
+              }
+            />
+          </div>
         </CardContent>
       </Card>
 

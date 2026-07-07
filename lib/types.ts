@@ -347,3 +347,8 @@ export interface ExtensionProxyAdminConfig {
   };
   message?: string;
 }
+
+export interface SchedulerSyncOptions {
+  autoAssignUserSessionsOnSync: boolean;
+  autoUpdateSessionProxiesOnSync: boolean;
+}
