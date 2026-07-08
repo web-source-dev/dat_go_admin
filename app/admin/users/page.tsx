@@ -171,7 +171,7 @@ export default function UsersPage() {
   const handleSyncAllSignalUsers = async () => {
     if (signalSyncLoading) return;
     const confirmed = confirm(
-      'Sync all DAT GO users to the Signal extension backend?\n\nThis updates existing Signal user records. Missing Signal users may fail because Signal needs a plain password to create new accounts.'
+      'Sync all DAT GO users to the Signal extension backend?\n\nThis creates or updates Signal user records (email, access flags, and password hash).'
     );
     if (!confirmed) return;
 
