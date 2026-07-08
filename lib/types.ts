@@ -57,6 +57,7 @@ export interface User {
   trialStartDate?: string;
   trialEndDate?: string;
   trialDurationHours?: number;
+  signalEnabled?: boolean;
 }
 
 export interface DATSession {

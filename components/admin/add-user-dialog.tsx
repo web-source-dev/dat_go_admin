@@ -51,6 +51,7 @@ export function AddUserDialog({ open, onClose, onSuccess, onRefresh }: AddUserDi
     note: '',
     isTrial: false,
     trialDurationHours: '1',
+    signalEnabled: false,
   });
   const [availableLabels, setAvailableLabels] = useState<string[]>([]);
   const { toast } = useToast();
@@ -116,6 +117,7 @@ export function AddUserDialog({ open, onClose, onSuccess, onRefresh }: AddUserDi
       note: formData.note.trim() || undefined,
       isTrial: formData.isTrial,
       trialDurationHours: formData.isTrial ? parseFloat(formData.trialDurationHours) : undefined,
+      signalEnabled: formData.signalEnabled,
     };
 
     // Add permissions if session is selected
@@ -498,6 +500,22 @@ export function AddUserDialog({ open, onClose, onSuccess, onRefresh }: AddUserDi
                     </p>
                   </div>
                 )}
+              </div>
+
+              <div className="space-y-2 border-t pt-4 mt-4">
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="checkbox"
+                    id="signalEnabled"
+                    checked={formData.signalEnabled}
+                    onChange={(e) => setFormData({ ...formData, signalEnabled: e.target.checked })}
+                    className="rounded border-gray-300"
+                  />
+                  <Label htmlFor="signalEnabled" className="font-medium">Enable Signal extension</Label>
+                </div>
+                <p className="text-xs text-muted-foreground ml-6">
+                  When enabled, this user can sign in to the Signal browser extension. Accounts are created in Dat Go only — there is no self-signup.
+                </p>
               </div>
             </div>
           </div>

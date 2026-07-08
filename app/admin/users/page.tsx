@@ -63,6 +63,7 @@ export default function UsersPage() {
   const [dateTo, setDateTo] = useState('');
   const [pendingPaymentsInfo, setPendingPaymentsInfo] = useState<{ count: number; amount: number } | null>(null);
   const [proxyToggleLoading, setProxyToggleLoading] = useState<Set<string>>(new Set());
+  const [signalToggleLoading, setSignalToggleLoading] = useState<Set<string>>(new Set());
   const searchParams = useSearchParams();
   const { toast } = useToast();
   const itemsPerPage = 10;
@@ -215,6 +216,31 @@ export default function UsersPage() {
       });
     } finally {
       setProxyToggleLoading((prev) => {
+        const next = new Set(prev);
+        next.delete(user._id);
+        return next;
+      });
+    }
+  };
+
+
+  const handleSignalToggle = async (user: User, enabled: boolean) => {
+    setSignalToggleLoading((prev) => new Set(prev).add(user._id));
+    try {
+      const response = await usersApi.update(user._id, { signalEnabled: enabled });
+      handleUserUpdated({ ...user, ...response, signalEnabled: enabled });
+      toast({
+        title: enabled ? 'Signal enabled' : 'Signal disabled',
+        description: `${user.name} ${enabled ? 'can' : 'cannot'} sign in to the Signal extension.`,
+      });
+    } catch (err: any) {
+      toast({
+        title: 'Error',
+        description: err.response?.data?.message || 'Failed to update Signal access',
+        variant: 'destructive',
+      });
+    } finally {
+      setSignalToggleLoading((prev) => {
         const next = new Set(prev);
         next.delete(user._id);
         return next;
@@ -470,6 +496,9 @@ export default function UsersPage() {
                     <th className="px-6 py-3 text-left text-sm font-semibold text-muted-foreground" title="Per-user extension proxy (server VPN)">
                       Ext. Proxy
                     </th>
+                    <th className="px-6 py-3 text-left text-sm font-semibold text-muted-foreground" title="Signal browser extension access">
+                      Signal
+                    </th>
                     <th className="px-6 py-3 text-left text-sm font-semibold text-muted-foreground">
                       Plan
                     </th>
@@ -556,6 +585,22 @@ export default function UsersPage() {
                             />
                             <span className="text-[10px] text-muted-foreground whitespace-nowrap">
                               {user.permissions?.extensionProxy === false ? 'Off' : 'On'}
+                            </span>
+                          </div>
+                        </td>
+                        <td
+                          className="px-6 py-4"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <div className="flex items-center gap-2">
+                            <Switch
+                              checked={user.signalEnabled === true}
+                              disabled={signalToggleLoading.has(user._id)}
+                              onCheckedChange={(checked) => handleSignalToggle(user, checked)}
+                              aria-label={`Signal access for ${user.name}`}
+                            />
+                            <span className="text-[10px] text-muted-foreground whitespace-nowrap">
+                              {user.signalEnabled ? 'On' : 'Off'}
                             </span>
                           </div>
                         </td>
