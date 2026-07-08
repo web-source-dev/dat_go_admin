@@ -4,7 +4,7 @@ import React from 'react';
 import { useSearchParams } from "next/navigation"
 import { Suspense, useEffect } from 'react';
 import { useState } from 'react';
-import { Search, Plus, MoreVertical, Shield, Ban, Edit, AlertCircle, ChevronDown, ChevronRight, X, Coins } from 'lucide-react';
+import { Search, Plus, MoreVertical, Shield, Ban, Edit, AlertCircle, ChevronDown, ChevronRight, X, Coins, RefreshCw } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/hooks/use-toast';
 import {
@@ -64,6 +64,7 @@ export default function UsersPage() {
   const [pendingPaymentsInfo, setPendingPaymentsInfo] = useState<{ count: number; amount: number } | null>(null);
   const [proxyToggleLoading, setProxyToggleLoading] = useState<Set<string>>(new Set());
   const [signalToggleLoading, setSignalToggleLoading] = useState<Set<string>>(new Set());
+  const [signalSyncLoading, setSignalSyncLoading] = useState(false);
   const searchParams = useSearchParams();
   const { toast } = useToast();
   const itemsPerPage = 10;
@@ -165,6 +166,32 @@ export default function UsersPage() {
 
   const handleAddUser = () => {
     setAddDialogOpen(true);
+  };
+
+  const handleSyncAllSignalUsers = async () => {
+    if (signalSyncLoading) return;
+    const confirmed = confirm(
+      'Sync all DAT GO users to the Signal extension backend?\n\nThis updates existing Signal user records. Missing Signal users may fail because Signal needs a plain password to create new accounts.'
+    );
+    if (!confirmed) return;
+
+    setSignalSyncLoading(true);
+    try {
+      const result = await usersApi.syncAllSignalUsers();
+      toast({
+        title: 'Signal sync completed',
+        description: `Attempted ${result.attempted}. Updated ${result.synced}. Failed ${result.failed}.`,
+      });
+      await fetchUsers();
+    } catch (err: any) {
+      toast({
+        title: 'Signal sync failed',
+        description: err.response?.data?.message || err.message || 'Failed to sync users',
+        variant: 'destructive',
+      });
+    } finally {
+      setSignalSyncLoading(false);
+    }
   };
 
   const handleEditUser = (user: User) => {
@@ -341,13 +368,23 @@ export default function UsersPage() {
                 Manage users, roles, and access permissions
               </p>
             </div>
-            <Button
-              className="bg-gradient-to-r from-primary to-primary/90 hover:from-primary/90 hover:to-primary text-primary-foreground shadow-md transition-all duration-200"
-              onClick={handleAddUser}
-            >
-              <Plus size={18} className="mr-2" />
-              Add User
-            </Button>
+            <div className="flex gap-2 items-center">
+              <Button
+                variant="outline"
+                onClick={handleSyncAllSignalUsers}
+                disabled={signalSyncLoading}
+              >
+                <RefreshCw size={18} className={`mr-2 ${signalSyncLoading ? 'animate-spin' : ''}`} />
+                {signalSyncLoading ? 'Syncing...' : 'Sync Signal Users'}
+              </Button>
+              <Button
+                className="bg-gradient-to-r from-primary to-primary/90 hover:from-primary/90 hover:to-primary text-primary-foreground shadow-md transition-all duration-200"
+                onClick={handleAddUser}
+              >
+                <Plus size={18} className="mr-2" />
+                Add User
+              </Button>
+            </div>
           </div>
         </div>
 

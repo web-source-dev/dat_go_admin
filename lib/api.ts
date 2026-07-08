@@ -66,6 +66,12 @@ export const usersApi = {
     return response.data;
   },
 
+  // Admin-only: push DAT GO users into the Signal extension backend.
+  syncAllSignalUsers: async () => {
+    const response = await api.post('/signal-sync/users/sync');
+    return response.data;
+  },
+
   create: async (userData: any) => {
     const response = await api.post('/user', userData);
     return response.data;
