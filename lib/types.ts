@@ -48,6 +48,8 @@ export interface User {
   referredBy?: string;
   referralUsedAt?: string;
   plan?: 'single' | 'double' | 'multi';
+  /** Desktop DAT open mode: ZIP profile extract, or active cookie for user's plan channel */
+  sessionOpenMode?: 'zip' | 'cookie';
   label?: string;
   anydeskid?: string;
   phone?: string;

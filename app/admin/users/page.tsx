@@ -539,6 +539,9 @@ export default function UsersPage() {
                     <th className="px-6 py-3 text-left text-sm font-semibold text-muted-foreground">
                       Plan
                     </th>
+                    <th className="px-6 py-3 text-left text-sm font-semibold text-muted-foreground" title="How desktop opens DAT">
+                      Open Mode
+                    </th>
                     <th className="px-6 py-3 text-left text-sm font-semibold text-muted-foreground">
                       Monthly Amount
                     </th>
@@ -644,6 +647,15 @@ export default function UsersPage() {
                         <td className="px-6 py-4">
                           <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-primary/10 text-primary capitalize">
                             {user.plan || 'single'}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4">
+                          <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium capitalize ${
+                            user.sessionOpenMode === 'cookie'
+                              ? 'bg-amber-500/10 text-amber-700 dark:text-amber-400'
+                              : 'bg-slate-500/10 text-slate-700 dark:text-slate-300'
+                          }`}>
+                            {user.sessionOpenMode === 'cookie' ? 'Cookie' : 'ZIP'}
                           </span>
                         </td>
                         <td className="px-6 py-4">
@@ -779,7 +791,7 @@ export default function UsersPage() {
                       </tr>
                       {expandedRows.has(user._id) && (
                         <tr>
-                          <td colSpan={13} className="px-6 py-4">
+                          <td colSpan={14} className="px-6 py-4">
                             <div className="space-y-4">
                               {/* Tab Buttons */}
                               <div className="flex gap-2">

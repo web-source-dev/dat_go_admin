@@ -45,6 +45,7 @@ export function AddUserDialog({ open, onClose, onSuccess, onRefresh }: AddUserDi
     billingDate: '',
     referralCode: '',
     plan: 'single' as 'single' | 'double' | 'multi',
+    sessionOpenMode: 'zip' as 'zip' | 'cookie',
     label: '',
     anydeskid: '',
     phone: '',
@@ -111,6 +112,7 @@ export function AddUserDialog({ open, onClose, onSuccess, onRefresh }: AddUserDi
       billingDate: formData.billingDate ? parseInt(formData.billingDate) : new Date().getDate(),
       referralCode: formData.referralCode.trim() || undefined,
       plan: formData.plan,
+      sessionOpenMode: formData.sessionOpenMode,
       label: formData.label.trim() || undefined,
       anydeskid: formData.anydeskid.trim() || undefined,
       phone: formData.phone.trim() || undefined,
@@ -216,12 +218,14 @@ export function AddUserDialog({ open, onClose, onSuccess, onRefresh }: AddUserDi
         billingDate: '',
         referralCode: '',
         plan: 'single',
+        sessionOpenMode: 'zip',
         label: '',
         anydeskid: '',
         phone: '',
         note: '',
         isTrial: false,
         trialDurationHours: '1',
+        signalEnabled: false,
       });
     } catch (error: any) {
       toast({
@@ -246,12 +250,14 @@ export function AddUserDialog({ open, onClose, onSuccess, onRefresh }: AddUserDi
         billingDate: '',
         referralCode: '',
         plan: 'single',
+        sessionOpenMode: 'zip',
         label: '',
         anydeskid: '',
         phone: '',
         note: '',
         isTrial: false,
         trialDurationHours: '1',
+        signalEnabled: false,
       });
     }
   };
@@ -416,6 +422,25 @@ export function AddUserDialog({ open, onClose, onSuccess, onRefresh }: AddUserDi
                 </Select>
                 <p className="text-xs text-muted-foreground">
                   User plan type (single/double/multi)
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="sessionOpenMode">DAT Session Open Mode *</Label>
+                <Select
+                  value={formData.sessionOpenMode}
+                  onValueChange={(value: 'zip' | 'cookie') => setFormData({ ...formData, sessionOpenMode: value })}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="zip">ZIP (profile session)</SelectItem>
+                    <SelectItem value="cookie">Cookie file</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  ZIP uses the assigned session profile. Cookie uses the active cookie for this user&apos;s plan (single/double/multi).
                 </p>
               </div>
 

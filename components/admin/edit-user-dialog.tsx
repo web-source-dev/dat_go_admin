@@ -43,6 +43,7 @@ export function EditUserDialog({ open, onClose, onSuccess, onRefresh, user }: Ed
     monthlyPaymentAmount: '',
     billingDate: '',
     plan: 'single' as 'single' | 'double' | 'multi',
+    sessionOpenMode: 'zip' as 'zip' | 'cookie',
     label: '',
     anydeskid: '',
     phone: '',
@@ -81,6 +82,7 @@ export function EditUserDialog({ open, onClose, onSuccess, onRefresh, user }: Ed
         monthlyPaymentAmount: user.monthlyPaymentAmount?.toString() || '',
         billingDate: user.billingDate?.toString() || '',
         plan: user.plan || 'single',
+        sessionOpenMode: user.sessionOpenMode === 'cookie' ? 'cookie' : 'zip',
         label: user.label || '',
         anydeskid: user.anydeskid || '',
         phone: user.phone || '',
@@ -127,6 +129,7 @@ export function EditUserDialog({ open, onClose, onSuccess, onRefresh, user }: Ed
         monthlyPaymentAmount: formData.monthlyPaymentAmount ? parseFloat(formData.monthlyPaymentAmount) : 0,
         billingDate: formData.billingDate ? parseInt(formData.billingDate) : undefined,
         plan: formData.plan,
+        sessionOpenMode: formData.sessionOpenMode,
         label: formData.label.trim() || undefined,
         anydeskid: formData.anydeskid.trim() || undefined,
         phone: formData.phone.trim() || undefined,
@@ -152,6 +155,7 @@ export function EditUserDialog({ open, onClose, onSuccess, onRefresh, user }: Ed
         email: response.email || user.email,
         permissions: response.permissions || user.permissions,
         plan: (response as any).plan || user.plan || 'single',
+        sessionOpenMode: (response as any).sessionOpenMode || user.sessionOpenMode || 'zip',
         phone: (response as any).phone ?? user.phone,
         note: (response as any).note ?? user.note,
       };
@@ -313,6 +317,25 @@ export function EditUserDialog({ open, onClose, onSuccess, onRefresh, user }: Ed
                 </Select>
                 <p className="text-xs text-muted-foreground">
                   User plan type (single/double/multi)
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="sessionOpenMode">DAT Session Open Mode *</Label>
+                <Select
+                  value={formData.sessionOpenMode}
+                  onValueChange={(value: 'zip' | 'cookie') => setFormData({ ...formData, sessionOpenMode: value })}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="zip">ZIP (profile session)</SelectItem>
+                    <SelectItem value="cookie">Cookie file</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  ZIP uses the assigned session profile. Cookie uses the active cookie for this user&apos;s plan (single/double/multi).
                 </p>
               </div>
 
