@@ -31,19 +31,6 @@ interface AddCookieDialogProps {
   onRefresh: () => void;
 }
 
-function suggestFileNameFromSession(session: DATSession | undefined): string {
-  if (!session) return '';
-  const zipBase = session.fileName
-    ? String(session.fileName).replace(/\.zip$/i, '')
-    : '';
-  const base = (zipBase || session.name || session._id || '')
-    .trim()
-    .replace(/[^a-zA-Z0-9._-]/g, '_')
-    .replace(/_+/g, '_')
-    .replace(/^_|_$/g, '');
-  return base ? `${base}.json` : '';
-}
-
 export function AddCookieDialog({ open, onClose, onSuccess, onRefresh }: AddCookieDialogProps) {
   const [loading, setLoading] = useState(false);
   const [sessions, setSessions] = useState<DATSession[]>([]);
@@ -144,11 +131,9 @@ export function AddCookieDialog({ open, onClose, onSuccess, onRefresh }: AddCook
   const handleSessionChange = (value: string) => {
     const sessionId = value === 'none' ? '' : value;
     const session = sessions.find((s) => s._id === sessionId);
-    const suggested = suggestFileNameFromSession(session);
     setFormData((prev) => ({
       ...prev,
       sessionId,
-      fileName: suggested || prev.fileName,
       label: (session?.label as AssignableCookieLabel) || prev.label,
     }));
   };
@@ -165,25 +150,10 @@ export function AddCookieDialog({ open, onClose, onSuccess, onRefresh }: AddCook
       return;
     }
 
-    if (!formData.fileName && !formData.sessionId) {
-      toast({
-        title: 'Error',
-        description: 'Enter a file name or select a session',
-        variant: 'destructive',
-      });
-      return;
-    }
-
-    const fileName = formData.fileName
-      ? formData.fileName.endsWith('.json')
-        ? formData.fileName
-        : `${formData.fileName}.json`
-      : undefined;
-
     setLoading(true);
     try {
       const response = await cookiesApi.create({
-        fileName,
+        fileName: formData.fileName || undefined,
         label: formData.label,
         sessionId: formData.sessionId || undefined,
         fileContent: parsedContent,
@@ -280,20 +250,18 @@ export function AddCookieDialog({ open, onClose, onSuccess, onRefresh }: AddCook
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="fileName">Save As File Name {formData.sessionId ? '' : '*'}</Label>
+              <Label htmlFor="fileName">Save As File Name (optional)</Label>
               <Input
                 id="fileName"
                 type="text"
-                placeholder="session-name.json"
+                placeholder="Leave blank to auto-name as manual-..."
                 value={formData.fileName}
                 onChange={(e) => setFormData({ ...formData, fileName: e.target.value })}
-                required={!formData.sessionId}
-                disabled={Boolean(formData.sessionId)}
               />
               <p className="text-xs text-muted-foreground">
-                {formData.sessionId
-                  ? 'File name is set from the selected session.'
-                  : 'Will add .json if missing.'}
+                Manual uploads are always saved as <code>manual-*.json</code> so sync never
+                overwrites them. Selecting a session only links the cookie — it does not use
+                the session ZIP filename.
               </p>
             </div>
 
