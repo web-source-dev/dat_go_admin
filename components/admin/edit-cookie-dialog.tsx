@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -23,7 +23,6 @@ import { cookiesApi, sessionsApi } from '@/lib/api';
 import { useToast } from '@/hooks/use-toast';
 import { Cookie, DATSession } from '@/lib/types';
 import { AssignableCookieLabel, COOKIE_LABEL_OPTIONS, CookieLabel } from '@/lib/cookieLabels';
-import { Textarea } from '@/components/ui/textarea';
 
 interface EditCookieDialogProps {
   open: boolean;
@@ -35,14 +34,16 @@ interface EditCookieDialogProps {
 
 export function EditCookieDialog({ open, onClose, onSuccess, onRefresh, cookie }: EditCookieDialogProps) {
   const [loading, setLoading] = useState(false);
-  const [loadingContent, setLoadingContent] = useState(false);
   const [sessions, setSessions] = useState<DATSession[]>([]);
   const [sessionsLoading, setSessionsLoading] = useState(false);
+  const [selectedFileName, setSelectedFileName] = useState('');
+  const [cookiePreview, setCookiePreview] = useState<{ count: number } | null>(null);
+  const [parsedContent, setParsedContent] = useState<any>(null);
   const [formData, setFormData] = useState({
     label: 'new' as CookieLabel,
     sessionId: '',
-    fileContent: '',
   });
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -56,10 +57,13 @@ export function EditCookieDialog({ open, onClose, onSuccess, onRefresh, cookie }
       setFormData({
         label: cookie.label || 'new',
         sessionId: cookie.sessionId || '',
-        fileContent: '',
       });
-      // Load cookie content
-      loadCookieContent();
+      setSelectedFileName('');
+      setCookiePreview(null);
+      setParsedContent(null);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
     }
   }, [cookie, open]);
 
@@ -80,25 +84,49 @@ export function EditCookieDialog({ open, onClose, onSuccess, onRefresh, cookie }
     }
   };
 
-  const loadCookieContent = async () => {
-    if (!cookie) return;
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) {
+      setSelectedFileName('');
+      setCookiePreview(null);
+      setParsedContent(null);
+      return;
+    }
 
-    setLoadingContent(true);
     try {
-      const response = await cookiesApi.getById(cookie._id);
-      setFormData(prev => ({
-        ...prev,
-        fileContent: JSON.stringify(response.content || {}, null, 2),
-      }));
-    } catch (error: any) {
+      const text = await file.text();
+      const parsed = JSON.parse(text);
+
+      let count = 0;
+      if (parsed?.['dat.com']?.cookies && Array.isArray(parsed['dat.com'].cookies)) {
+        count = parsed['dat.com'].cookies.length;
+      } else if (Array.isArray(parsed)) {
+        count = parsed.length;
+      } else if (Array.isArray(parsed?.cookies)) {
+        count = parsed.cookies.length;
+      }
+
+      setParsedContent(parsed);
+      setSelectedFileName(file.name);
+      setCookiePreview({ count });
+    } catch (error) {
+      setParsedContent(null);
+      setCookiePreview(null);
+      setSelectedFileName('');
+      if (fileInputRef.current) fileInputRef.current.value = '';
       toast({
         title: 'Error',
-        description: 'Failed to load cookie content',
+        description: 'Selected file is not valid JSON',
         variant: 'destructive',
       });
-    } finally {
-      setLoadingContent(false);
     }
+  };
+
+  const clearSelectedFile = () => {
+    setParsedContent(null);
+    setCookiePreview(null);
+    setSelectedFileName('');
+    if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -106,42 +134,30 @@ export function EditCookieDialog({ open, onClose, onSuccess, onRefresh, cookie }
 
     if (!cookie) return;
 
-    // Validate JSON if fileContent is provided
-    if (formData.fileContent) {
-      try {
-        JSON.parse(formData.fileContent);
-      } catch (error) {
-        toast({
-          title: 'Error',
-          description: 'Invalid JSON content',
-          variant: 'destructive',
-        });
-        return;
-      }
-    }
-
     setLoading(true);
     try {
       const updateData: any = {
         label: formData.label,
       };
 
-      // Include sessionId if changed (allow clearing by setting to empty string)
       if (formData.sessionId !== cookie.sessionId) {
         updateData.sessionId = formData.sessionId || null;
       }
 
-      if (formData.fileContent) {
-        updateData.fileContent = JSON.parse(formData.fileContent);
+      if (parsedContent) {
+        updateData.fileContent = parsedContent;
       }
 
       const response = await cookiesApi.update(cookie._id, updateData);
 
       toast({
         title: 'Success',
-        description: 'Cookie file updated successfully',
+        description: parsedContent
+          ? 'Cookie file updated and converted successfully'
+          : 'Cookie file updated successfully',
       });
       onSuccess(response);
+      onRefresh();
       onClose();
     } catch (error: any) {
       toast({
@@ -169,104 +185,107 @@ export function EditCookieDialog({ open, onClose, onSuccess, onRefresh, cookie }
           <DialogHeader>
             <DialogTitle>Edit Cookie File</DialogTitle>
             <DialogDescription>
-              Update cookie file label and content.
+              Update label, session, or replace cookies by selecting a JSON file (auto-converted).
             </DialogDescription>
           </DialogHeader>
         </div>
 
         <form onSubmit={handleSubmit} className="flex flex-col flex-1 overflow-hidden px-6">
           <div className="space-y-4 overflow-y-auto flex-1 pr-2">
-          <div className="space-y-2">
-            <Label htmlFor="fileName">File Name</Label>
-            <Input
-              id="fileName"
-              type="text"
-              value={cookie.fileName}
-              disabled
-              className="bg-muted"
-            />
-            <p className="text-xs text-muted-foreground">
-              File name cannot be changed
-            </p>
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="label">Label *</Label>
-            <Select
-              value={formData.label}
-              onValueChange={(value: AssignableCookieLabel) => setFormData({ ...formData, label: value })}
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {COOKIE_LABEL_OPTIONS.map((opt) => (
-                  <SelectItem key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </SelectItem>
-                ))}
-                {formData.label === 'multi' && (
-                  <SelectItem value="multi">Multi (legacy)</SelectItem>
-                )}
-              </SelectContent>
-            </Select>
-            <p className="text-xs text-muted-foreground">
-              Cookie file label
-            </p>
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="sessionId">Session</Label>
-            <Select
-              value={formData.sessionId || 'none'}
-              onValueChange={(value: string) => setFormData({ ...formData, sessionId: value === 'none' ? '' : value })}
-              disabled={sessionsLoading}
-            >
-              <SelectTrigger className="bg-card border-border">
-                <SelectValue placeholder={sessionsLoading ? "Loading sessions..." : "Select session"} />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">No session (unassigned)</SelectItem>
-                {sessions.map((session) => (
-                  <SelectItem key={session._id} value={session._id}>
-                    {session.name} ({session.label || 'single'})
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <p className="text-xs text-muted-foreground">
-              Assign this cookie file to a specific session
-            </p>
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="fileContent">Cookie JSON Content</Label>
-            {loadingContent ? (
-              <div className="flex items-center justify-center py-8">
-                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary"></div>
-              </div>
-            ) : (
-              <Textarea
-                id="fileContent"
-                placeholder='{"dat.com": {"cookies": [], "localStorage": {}, "sessionStorage": {}}}'
-                value={formData.fileContent}
-                onChange={(e) => setFormData({ ...formData, fileContent: e.target.value })}
-                className="font-mono text-xs resize-none overflow-x-auto break-words"
-                rows={8}
-                style={{ wordBreak: 'break-all', whiteSpace: 'pre-wrap' }}
+            <div className="space-y-2">
+              <Label htmlFor="fileName">File Name</Label>
+              <Input
+                id="fileName"
+                type="text"
+                value={cookie.fileName}
+                disabled
+                className="bg-muted"
               />
-            )}
-            <p className="text-xs text-muted-foreground">
-              Update the JSON content for the cookie file (leave empty to keep current content)
-            </p>
-          </div>
+              <p className="text-xs text-muted-foreground">
+                File name cannot be changed · Current cookies: {cookie.cookieCount ?? 0}
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="label">Label *</Label>
+              <Select
+                value={formData.label}
+                onValueChange={(value: AssignableCookieLabel) =>
+                  setFormData({ ...formData, label: value })
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {COOKIE_LABEL_OPTIONS.map((opt) => (
+                    <SelectItem key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </SelectItem>
+                  ))}
+                  {formData.label === 'multi' && (
+                    <SelectItem value="multi">Multi (legacy)</SelectItem>
+                  )}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="sessionId">Session</Label>
+              <Select
+                value={formData.sessionId || 'none'}
+                onValueChange={(value: string) =>
+                  setFormData({ ...formData, sessionId: value === 'none' ? '' : value })
+                }
+                disabled={sessionsLoading}
+              >
+                <SelectTrigger className="bg-card border-border">
+                  <SelectValue placeholder={sessionsLoading ? 'Loading sessions...' : 'Select session'} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">No session (unassigned)</SelectItem>
+                  {sessions.map((session) => (
+                    <SelectItem key={session._id} value={session._id}>
+                      {session.name} ({session.label || 'single'})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="replaceCookieFile">Replace Cookie JSON (Optional)</Label>
+              <Input
+                id="replaceCookieFile"
+                ref={fileInputRef}
+                type="file"
+                accept=".json,application/json"
+                onChange={handleFileChange}
+              />
+              {selectedFileName ? (
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-xs text-muted-foreground">
+                    Selected: {selectedFileName}
+                    {cookiePreview != null && ` · ~${cookiePreview.count} cookie(s)`}
+                  </p>
+                  <Button type="button" variant="ghost" size="sm" onClick={clearSelectedFile}>
+                    Clear
+                  </Button>
+                </div>
+              ) : (
+                <p className="text-xs text-muted-foreground">
+                  Leave empty to keep current cookies. Upload a dat.com export or any supported
+                  JSON to replace and auto-convert.
+                </p>
+              )}
+            </div>
           </div>
 
           <DialogFooter className="pt-4 border-t mt-4 pb-0">
             <Button type="button" variant="outline" onClick={handleClose} disabled={loading}>
               Cancel
             </Button>
-            <Button type="submit" disabled={loading || loadingContent}>
+            <Button type="submit" disabled={loading}>
               {loading ? 'Updating...' : 'Update Cookie File'}
             </Button>
           </DialogFooter>
@@ -275,4 +294,3 @@ export function EditCookieDialog({ open, onClose, onSuccess, onRefresh, cookie }
     </Dialog>
   );
 }
-

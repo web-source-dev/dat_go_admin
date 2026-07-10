@@ -250,7 +250,12 @@ export const cookiesApi = {
     return response.data;
   },
 
-  create: async (cookieData: { fileName: string; label?: string; sessionId?: string; fileContent: any }) => {
+  create: async (cookieData: {
+    fileName?: string;
+    label?: string;
+    sessionId?: string;
+    fileContent: any;
+  }) => {
     const response = await api.post('/cookie', cookieData);
     return response.data;
   },
