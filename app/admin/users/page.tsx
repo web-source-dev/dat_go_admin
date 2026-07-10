@@ -64,6 +64,7 @@ export default function UsersPage() {
   const [pendingPaymentsInfo, setPendingPaymentsInfo] = useState<{ count: number; amount: number } | null>(null);
   const [proxyToggleLoading, setProxyToggleLoading] = useState<Set<string>>(new Set());
   const [signalToggleLoading, setSignalToggleLoading] = useState<Set<string>>(new Set());
+  const [sessionModeLoading, setSessionModeLoading] = useState<Set<string>>(new Set());
   const [signalSyncLoading, setSignalSyncLoading] = useState(false);
   const searchParams = useSearchParams();
   const { toast } = useToast();
@@ -268,6 +269,37 @@ export default function UsersPage() {
       });
     } finally {
       setSignalToggleLoading((prev) => {
+        const next = new Set(prev);
+        next.delete(user._id);
+        return next;
+      });
+    }
+  };
+
+  const handleSessionOpenModeChange = async (user: User, mode: 'zip' | 'cookie') => {
+    const current = user.sessionOpenMode === 'cookie' ? 'cookie' : 'zip';
+    if (current === mode || sessionModeLoading.has(user._id)) return;
+
+    setSessionModeLoading((prev) => new Set(prev).add(user._id));
+    try {
+      const response = await usersApi.update(user._id, { sessionOpenMode: mode });
+      handleUserUpdated({
+        ...user,
+        ...response,
+        sessionOpenMode: mode,
+      });
+      toast({
+        title: mode === 'cookie' ? 'Cookie mode enabled' : 'ZIP mode enabled',
+        description: `${user.name} will open DAT using ${mode === 'cookie' ? 'cookie file' : 'session ZIP'}.`,
+      });
+    } catch (err: any) {
+      toast({
+        title: 'Error',
+        description: err.response?.data?.message || 'Failed to update session open mode',
+        variant: 'destructive',
+      });
+    } finally {
+      setSessionModeLoading((prev) => {
         const next = new Set(prev);
         next.delete(user._id);
         return next;
@@ -649,14 +681,23 @@ export default function UsersPage() {
                             {user.plan || 'single'}
                           </span>
                         </td>
-                        <td className="px-6 py-4">
-                          <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium capitalize ${
-                            user.sessionOpenMode === 'cookie'
-                              ? 'bg-amber-500/10 text-amber-700 dark:text-amber-400'
-                              : 'bg-slate-500/10 text-slate-700 dark:text-slate-300'
-                          }`}>
-                            {user.sessionOpenMode === 'cookie' ? 'Cookie' : 'ZIP'}
-                          </span>
+                        <td
+                          className="px-6 py-4"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <Select
+                            value={user.sessionOpenMode === 'cookie' ? 'cookie' : 'zip'}
+                            onValueChange={(value: 'zip' | 'cookie') => handleSessionOpenModeChange(user, value)}
+                            disabled={sessionModeLoading.has(user._id)}
+                          >
+                            <SelectTrigger className="h-8 w-[110px] text-xs">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="zip">ZIP</SelectItem>
+                              <SelectItem value="cookie">Cookie</SelectItem>
+                            </SelectContent>
+                          </Select>
                         </td>
                         <td className="px-6 py-4">
                           {user.monthlyPaymentAmount && user.monthlyPaymentAmount > 0 ? (
