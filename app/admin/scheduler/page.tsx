@@ -109,9 +109,38 @@ export default function SchedulerPage() {
   const updateSyncOptions = async (patch: Partial<SchedulerSyncOptions>) => {
     try {
       setSyncOptionsLoading(true);
-      const response = await schedulerApi.updateSyncOptions(patch, statusBackend.url);
-      setSyncOptions(response.data);
-      toast.success('Sync settings updated');
+      // Always write to every backend so toggles stay consistent (each has its own DB).
+      const results = await Promise.allSettled(
+        SCHEDULER_BACKENDS.map((b) => schedulerApi.updateSyncOptions(patch, b.url))
+      );
+      const ok = results.filter((r) => r.status === 'fulfilled');
+      const failed = results.filter((r) => r.status === 'rejected');
+
+      if (ok.length === 0) {
+        throw new Error('All backends failed to update sync settings');
+      }
+
+      const primaryOk = results[0];
+      if (primaryOk.status === 'fulfilled') {
+        setSyncOptions(primaryOk.value.data);
+      } else {
+        const firstOk = ok[0] as PromiseFulfilledResult<{
+          success: boolean;
+          data: SchedulerSyncOptions;
+        }>;
+        setSyncOptions(firstOk.value.data);
+      }
+
+      if (failed.length > 0) {
+        toast.warning(
+          `Sync settings updated on ${ok.length}/${SCHEDULER_BACKENDS.length} backends`,
+          {
+            description: 'Some backends failed — switch target and retry if needed.',
+          }
+        );
+      } else {
+        toast.success('Sync settings updated on all backends');
+      }
     } catch (error: any) {
       toast.error('Failed to update sync settings', {
         description: error?.response?.data?.message || error?.message || 'Request failed',
@@ -338,15 +367,16 @@ export default function SchedulerPage() {
         <CardHeader>
           <CardTitle>Session Sync Behavior</CardTitle>
           <CardDescription>
-            Control whether sync automatically reassigns user sessions and overwrites proxies from external API.
+            Applies to scheduler sync and user troubleshoot. Changes are saved to all backends.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-5">
           <div className="flex items-center justify-between gap-3">
             <div>
-              <p className="text-sm font-medium">Auto-assign users to another session on sync</p>
+              <p className="text-sm font-medium">Auto-assign users to another session</p>
               <p className="text-xs text-muted-foreground">
-                When OFF, assigned users keep their current session mapping (no automatic reassignment).
+                When OFF, users keep their current session — sync will not reassign them, and
+                troubleshoot will only retry their assigned session.
               </p>
             </div>
             <Switch
@@ -360,9 +390,10 @@ export default function SchedulerPage() {
 
           <div className="flex items-center justify-between gap-3">
             <div>
-              <p className="text-sm font-medium">Auto-update session proxies from external sync</p>
+              <p className="text-sm font-medium">Auto-update session proxies from external API</p>
               <p className="text-xs text-muted-foreground">
-                Turn OFF to keep manually edited proxy values unchanged during sync.
+                When OFF, session proxy strings are never overwritten by sync or troubleshoot.
+                Edit proxies only from the admin sessions page.
               </p>
             </div>
             <Switch
