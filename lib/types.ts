@@ -145,6 +145,8 @@ export interface Cookie {
   lastUpdated?: string;
   extractionDate?: string;
   sourceZipFile?: string;
+  /** Admin-uploaded; never auto-deleted by sync */
+  isManualUpload?: boolean;
   isActive: boolean;
   isActiveSingle?: boolean;
   isActiveDouble?: boolean;
