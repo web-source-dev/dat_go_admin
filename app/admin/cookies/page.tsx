@@ -132,6 +132,80 @@ export default function CookiesPage() {
 
   type CookieChannel = 'single' | 'double' | 'multi' | 'swiftSolutions' | 'test';
 
+  const [togglingKey, setTogglingKey] = useState<string | null>(null);
+
+  const isChannelActive = (cookie: Cookie, channel: CookieChannel) => {
+    switch (channel) {
+      case 'double':
+        return Boolean(cookie.isActiveDouble);
+      case 'multi':
+        return Boolean(cookie.isActiveMulti);
+      case 'swiftSolutions':
+        return Boolean(cookie.isActiveSwiftSolutions);
+      case 'test':
+        return Boolean(cookie.isActiveTest);
+      case 'single':
+      default:
+        return Boolean(cookie.isActiveSingle);
+    }
+  };
+
+  const handleToggleChannel = async (cookie: Cookie, channel: CookieChannel) => {
+    const key = `${cookie._id}:${channel}`;
+    if (togglingKey) return;
+    setTogglingKey(key);
+    try {
+      if (isChannelActive(cookie, channel)) {
+        await cookiesApi.deactivate(cookie._id, channel);
+      } else {
+        await cookiesApi.activate(cookie._id, channel);
+      }
+      await fetchCookies();
+      setError(null);
+    } catch (err: any) {
+      setError(
+        err.response?.data?.message ||
+          err.message ||
+          `Failed to toggle ${channel} for this cookie`
+      );
+    } finally {
+      setTogglingKey(null);
+    }
+  };
+
+  const renderChannelToggle = (
+    cookie: Cookie,
+    channel: CookieChannel,
+    activeClassName: string
+  ) => {
+    const active = isChannelActive(cookie, channel);
+    const key = `${cookie._id}:${channel}`;
+    const busy = togglingKey === key;
+
+    return (
+      <button
+        type="button"
+        disabled={!!togglingKey}
+        onClick={() => handleToggleChannel(cookie, channel)}
+        title={active ? `Click to disable ${channel}` : `Click to enable ${channel}`}
+        className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium border transition-colors cursor-pointer disabled:opacity-60 disabled:cursor-wait hover:opacity-90 ${
+          active
+            ? activeClassName
+            : 'bg-gray-500/10 text-gray-600 border-gray-500/30 hover:bg-gray-500/20'
+        }`}
+      >
+        {busy ? (
+          <span className="inline-block w-3.5 h-3.5 mr-1 rounded-full border-2 border-current border-t-transparent animate-spin" />
+        ) : active ? (
+          <CheckCircle2 size={14} className="mr-1" />
+        ) : (
+          <Circle size={14} className="mr-1" />
+        )}
+        {busy ? '…' : active ? 'Active' : 'Inactive'}
+      </button>
+    );
+  };
+
   const handleActivateCookie = async (cookie: Cookie, channel: CookieChannel) => {
     try {
       await cookiesApi.activate(cookie._id, channel);
@@ -222,7 +296,7 @@ export default function CookiesPage() {
             <div>
               <h1 className="text-3xl font-bold text-foreground">Cookie Management</h1>
               <p className="text-sm text-muted-foreground mt-1">
-                Manage cookie files — enable one active file per channel (Single, Double, Multi, Swift, Test)
+                Click Active/Inactive tags to enable or disable a cookie for each channel
               </p>
             </div>
             <div className="flex gap-2">
@@ -437,68 +511,38 @@ export default function CookiesPage() {
                         </div>
                       </td>
                       <td className="px-6 py-4">
-                        {cookie.isActiveSingle ? (
-                          <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-green-500/10 text-green-600 border border-green-500/30">
-                            <CheckCircle2 size={14} className="mr-1" />
-                            Active
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-gray-500/10 text-gray-600 border border-gray-500/30">
-                            <Circle size={14} className="mr-1" />
-                            Inactive
-                          </span>
+                        {renderChannelToggle(
+                          cookie,
+                          'single',
+                          'bg-green-500/10 text-green-600 border-green-500/30'
                         )}
                       </td>
                       <td className="px-6 py-4">
-                        {cookie.isActiveDouble ? (
-                          <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-green-500/10 text-green-600 border border-green-500/30">
-                            <CheckCircle2 size={14} className="mr-1" />
-                            Active
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-gray-500/10 text-gray-600 border border-gray-500/30">
-                            <Circle size={14} className="mr-1" />
-                            Inactive
-                          </span>
+                        {renderChannelToggle(
+                          cookie,
+                          'double',
+                          'bg-green-500/10 text-green-600 border-green-500/30'
                         )}
                       </td>
                       <td className="px-6 py-4">
-                        {cookie.isActiveMulti ? (
-                          <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-green-500/10 text-green-600 border border-green-500/30">
-                            <CheckCircle2 size={14} className="mr-1" />
-                            Active
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-gray-500/10 text-gray-600 border border-gray-500/30">
-                            <Circle size={14} className="mr-1" />
-                            Inactive
-                          </span>
+                        {renderChannelToggle(
+                          cookie,
+                          'multi',
+                          'bg-green-500/10 text-green-600 border-green-500/30'
                         )}
                       </td>
                       <td className="px-6 py-4">
-                        {cookie.isActiveSwiftSolutions ? (
-                          <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-emerald-500/10 text-emerald-600 border border-emerald-500/30">
-                            <CheckCircle2 size={14} className="mr-1" />
-                            Active
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-gray-500/10 text-gray-600 border border-gray-500/30">
-                            <Circle size={14} className="mr-1" />
-                            Inactive
-                          </span>
+                        {renderChannelToggle(
+                          cookie,
+                          'swiftSolutions',
+                          'bg-emerald-500/10 text-emerald-600 border-emerald-500/30'
                         )}
                       </td>
                       <td className="px-6 py-4">
-                        {cookie.isActiveTest ? (
-                          <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-violet-500/10 text-violet-600 border border-violet-500/30">
-                            <CheckCircle2 size={14} className="mr-1" />
-                            Active
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-gray-500/10 text-gray-600 border border-gray-500/30">
-                            <Circle size={14} className="mr-1" />
-                            Inactive
-                          </span>
+                        {renderChannelToggle(
+                          cookie,
+                          'test',
+                          'bg-violet-500/10 text-violet-600 border-violet-500/30'
                         )}
                       </td>
                       <td className="px-6 py-4">
