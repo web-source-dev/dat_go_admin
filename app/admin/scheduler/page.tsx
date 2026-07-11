@@ -293,79 +293,74 @@ export default function SchedulerPage() {
         </div>
       </div>
 
-      {/* Full-width top row: status | sync options */}
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-5 flex-1 min-h-0">
-        <Card className="h-full">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-lg flex items-center gap-2">
+      {/* Top row: status | sync options — compact height */}
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+        <Card>
+          <CardHeader className="py-3 px-4 pb-2">
+            <CardTitle className="text-base flex items-center gap-2">
               Status
               <Badge variant="outline">{statusBackend.label}</Badge>
             </CardTitle>
-            <CardDescription>
-              Current scheduler state for the selected backend
-            </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-5">
-            <div className="flex flex-wrap gap-2">
-              <Badge variant={status?.autoEnabled ? 'default' : 'secondary'} className="px-3 py-1">
+          <CardContent className="px-4 pb-3 pt-0 space-y-2.5">
+            <div className="flex flex-wrap gap-1.5">
+              <Badge variant={status?.autoEnabled ? 'default' : 'secondary'}>
                 Auto: {status?.autoEnabled ? 'On' : 'Paused'}
               </Badge>
-              <Badge variant={status?.isScheduled ? 'default' : 'secondary'} className="px-3 py-1">
+              <Badge variant={status?.isScheduled ? 'default' : 'secondary'}>
                 Cron: {status?.isScheduled ? 'Active' : 'Inactive'}
               </Badge>
-              <Badge variant={status?.isRunning ? 'destructive' : 'outline'} className="px-3 py-1">
+              <Badge variant={status?.isRunning ? 'destructive' : 'outline'}>
                 Running: {status?.isRunning ? 'Yes' : 'No'}
               </Badge>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <div className="rounded-lg border border-border bg-muted/30 p-4">
-                <p className="text-xs text-muted-foreground mb-1">Next run (UTC)</p>
-                <p className="text-sm font-semibold">
+            <div className="flex flex-wrap gap-x-5 gap-y-1 text-sm">
+              <div className="flex items-center gap-1.5">
+                <span className="text-muted-foreground">UTC</span>
+                <span className="font-medium">
                   {status?.nextRun ? formatShortDate(status.nextRun, 'UTC') : '—'}
-                </p>
+                </span>
               </div>
-              <div className="rounded-lg border border-border bg-muted/30 p-4">
-                <p className="text-xs text-muted-foreground mb-1">Next run (PST)</p>
-                <p className="text-sm font-semibold">
+              <div className="flex items-center gap-1.5">
+                <span className="text-muted-foreground">PST</span>
+                <span className="font-medium">
                   {status?.nextRunPST
                     ? `${formatShortDate(status.nextRunPST.replace(' PST', ''), 'Asia/Karachi')} PST`
                     : '—'}
-                </p>
+                </span>
               </div>
-              <div className="rounded-lg border border-border bg-muted/30 p-4">
-                <p className="text-xs text-muted-foreground mb-1">Next DB backup</p>
-                <p className="text-sm font-semibold">
+              <div className="flex items-center gap-1.5">
+                <span className="text-muted-foreground">Backup</span>
+                <span className="font-medium">
                   {status?.nextBackupRun
                     ? formatShortDate(String(status.nextBackupRun), 'UTC')
                     : '—'}
-                </p>
+                </span>
               </div>
             </div>
 
             {!status?.autoEnabled && (
-              <p className="text-sm text-muted-foreground rounded-lg bg-muted/50 px-3 py-2">
-                Set <code className="bg-muted px-1 rounded text-xs">SCHEDULER_AUTO_ENABLED=true</code>{' '}
-                to resume daily cron. Manual triggers still work.
+              <p className="text-xs text-muted-foreground">
+                Set <code className="bg-muted px-1 rounded">SCHEDULER_AUTO_ENABLED=true</code> for
+                daily cron. Manual triggers still work.
               </p>
             )}
           </CardContent>
         </Card>
 
-        <Card className="h-full">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-lg">Sync Options</CardTitle>
-            <CardDescription>
-              Saved to all backends. Applies to scheduler sync and troubleshoot.
+        <Card>
+          <CardHeader className="py-3 px-4 pb-2">
+            <CardTitle className="text-base">Sync Options</CardTitle>
+            <CardDescription className="text-xs">
+              Saved to all backends · sync + troubleshoot
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-6">
-            <div className="flex items-start justify-between gap-4 rounded-lg border border-border p-4">
-              <div className="min-w-0 space-y-1">
+          <CardContent className="px-4 pb-3 pt-0 space-y-2">
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
                 <p className="text-sm font-medium">Auto-assign user sessions</p>
-                <p className="text-sm text-muted-foreground">
-                  When off, users keep their current session mapping during sync and troubleshoot.
-                </p>
+                <p className="text-xs text-muted-foreground">Off = keep current session mapping</p>
               </div>
               <Switch
                 checked={Boolean(syncOptions?.autoAssignUserSessionsOnSync)}
@@ -375,12 +370,10 @@ export default function SchedulerPage() {
                 }
               />
             </div>
-            <div className="flex items-start justify-between gap-4 rounded-lg border border-border p-4">
-              <div className="min-w-0 space-y-1">
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
                 <p className="text-sm font-medium">Auto-update session proxies</p>
-                <p className="text-sm text-muted-foreground">
-                  When off, session proxy strings are never overwritten from the external API.
-                </p>
+                <p className="text-xs text-muted-foreground">Off = never overwrite proxies from API</p>
               </div>
               <Switch
                 checked={Boolean(syncOptions?.autoUpdateSessionProxiesOnSync)}
