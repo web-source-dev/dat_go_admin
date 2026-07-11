@@ -51,56 +51,48 @@ const ACTIONS: {
   name: string;
   label: string;
   description: string;
-  variant?: 'default' | 'outline' | 'secondary';
 }[] = [
   {
     action: 'sync',
     name: 'Session Sync',
     label: 'Sync Sessions',
     description: 'Sync sessions from external API',
-    variant: 'outline',
   },
   {
     action: 'download',
     name: 'Download Files',
     label: 'Download ZIPs',
     description: 'Download session ZIPs + extract cookies',
-    variant: 'outline',
   },
   {
     action: 'full',
     name: 'Full Sync',
     label: 'Full Sync',
     description: 'Sessions + downloads + FreightDesk',
-    variant: 'default',
   },
   {
     action: 'freightdesk',
     name: 'FreightDesk Import',
     label: 'FD Import',
     description: 'Import FreightDesk containers',
-    variant: 'outline',
   },
   {
     action: 'payments',
     name: 'Payment Check',
     label: 'Check Payments',
     description: 'Overdue payments + ban check',
-    variant: 'outline',
   },
   {
     action: 'referrals',
     name: 'Referral Updates',
     label: 'Update Referrals',
     description: 'Refresh referral discount statuses',
-    variant: 'outline',
   },
   {
     action: 'backup',
     name: 'Database backup',
     label: 'DB Backup',
     description: 'Copy DB to backup target URI',
-    variant: 'secondary',
   },
 ];
 
@@ -257,13 +249,23 @@ export default function SchedulerPage() {
   }
 
   return (
-    <div className="space-y-4 p-6 max-w-6xl">
+    <div className="flex flex-col gap-5 p-6 w-full min-h-full">
       {/* Header + backend target */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-foreground">Scheduler</h1>
           <p className="text-sm text-muted-foreground mt-0.5">
             Status, sync options, and manual triggers
+            {' · '}
+            Target:{' '}
+            {target === 'all' ? (
+              <span className="font-medium text-foreground">all backends</span>
+            ) : (
+              <>
+                <span className="font-medium text-foreground">{statusBackend.label}</span>{' '}
+                <code className="bg-muted px-1 rounded text-xs">{statusBackend.url}</code>
+              </>
+            )}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -284,93 +286,85 @@ export default function SchedulerPage() {
           >
             All
           </Button>
-          <Button size="sm" variant="ghost" onClick={fetchStatus} title="Refresh status">
-            <RefreshCw size={16} />
+          <Button size="sm" variant="outline" onClick={fetchStatus} title="Refresh status">
+            <RefreshCw size={16} className="mr-1.5" />
+            Refresh
           </Button>
         </div>
       </div>
 
-      <p className="text-xs text-muted-foreground -mt-1">
-        Target:{' '}
-        {target === 'all' ? (
-          <span>all backends</span>
-        ) : (
-          <>
-            <span className="font-medium">{statusBackend.label}</span>{' '}
-            <code className="bg-muted px-1 rounded">{statusBackend.url}</code>
-          </>
-        )}
-      </p>
-
-      {/* Compact status + sync options */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <Card>
-          <CardHeader className="py-3 px-4">
-            <CardTitle className="text-base flex items-center gap-2">
+      {/* Full-width top row: status | sync options */}
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-5 flex-1 min-h-0">
+        <Card className="h-full">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-lg flex items-center gap-2">
               Status
               <Badge variant="outline">{statusBackend.label}</Badge>
             </CardTitle>
+            <CardDescription>
+              Current scheduler state for the selected backend
+            </CardDescription>
           </CardHeader>
-          <CardContent className="px-4 pb-4 pt-0 space-y-3">
+          <CardContent className="space-y-5">
             <div className="flex flex-wrap gap-2">
-              <Badge variant={status?.autoEnabled ? 'default' : 'secondary'}>
+              <Badge variant={status?.autoEnabled ? 'default' : 'secondary'} className="px-3 py-1">
                 Auto: {status?.autoEnabled ? 'On' : 'Paused'}
               </Badge>
-              <Badge variant={status?.isScheduled ? 'default' : 'secondary'}>
+              <Badge variant={status?.isScheduled ? 'default' : 'secondary'} className="px-3 py-1">
                 Cron: {status?.isScheduled ? 'Active' : 'Inactive'}
               </Badge>
-              <Badge variant={status?.isRunning ? 'destructive' : 'outline'}>
+              <Badge variant={status?.isRunning ? 'destructive' : 'outline'} className="px-3 py-1">
                 Running: {status?.isRunning ? 'Yes' : 'No'}
               </Badge>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 text-sm">
-              <div className="flex justify-between gap-2">
-                <span className="text-muted-foreground">Next (UTC)</span>
-                <span className="font-medium">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="rounded-lg border border-border bg-muted/30 p-4">
+                <p className="text-xs text-muted-foreground mb-1">Next run (UTC)</p>
+                <p className="text-sm font-semibold">
                   {status?.nextRun ? formatShortDate(status.nextRun, 'UTC') : '—'}
-                </span>
+                </p>
               </div>
-              <div className="flex justify-between gap-2">
-                <span className="text-muted-foreground">Next (PST)</span>
-                <span className="font-medium">
+              <div className="rounded-lg border border-border bg-muted/30 p-4">
+                <p className="text-xs text-muted-foreground mb-1">Next run (PST)</p>
+                <p className="text-sm font-semibold">
                   {status?.nextRunPST
                     ? `${formatShortDate(status.nextRunPST.replace(' PST', ''), 'Asia/Karachi')} PST`
                     : '—'}
-                </span>
+                </p>
               </div>
-              <div className="flex justify-between gap-2 sm:col-span-2">
-                <span className="text-muted-foreground">Next DB backup</span>
-                <span className="font-medium">
+              <div className="rounded-lg border border-border bg-muted/30 p-4">
+                <p className="text-xs text-muted-foreground mb-1">Next DB backup</p>
+                <p className="text-sm font-semibold">
                   {status?.nextBackupRun
                     ? formatShortDate(String(status.nextBackupRun), 'UTC')
                     : '—'}
-                </span>
+                </p>
               </div>
             </div>
 
             {!status?.autoEnabled && (
-              <p className="text-xs text-muted-foreground rounded-md bg-muted/50 px-2 py-1.5">
-                Set <code className="bg-muted px-1 rounded">SCHEDULER_AUTO_ENABLED=true</code> to
-                resume daily cron. Manual triggers still work.
+              <p className="text-sm text-muted-foreground rounded-lg bg-muted/50 px-3 py-2">
+                Set <code className="bg-muted px-1 rounded text-xs">SCHEDULER_AUTO_ENABLED=true</code>{' '}
+                to resume daily cron. Manual triggers still work.
               </p>
             )}
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader className="py-3 px-4">
-            <CardTitle className="text-base">Sync Options</CardTitle>
-            <CardDescription className="text-xs">
-              Saved to all backends. Applies to sync and troubleshoot.
+        <Card className="h-full">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-lg">Sync Options</CardTitle>
+            <CardDescription>
+              Saved to all backends. Applies to scheduler sync and troubleshoot.
             </CardDescription>
           </CardHeader>
-          <CardContent className="px-4 pb-4 pt-0 space-y-3">
-            <div className="flex items-center justify-between gap-3">
-              <div className="min-w-0">
+          <CardContent className="space-y-6">
+            <div className="flex items-start justify-between gap-4 rounded-lg border border-border p-4">
+              <div className="min-w-0 space-y-1">
                 <p className="text-sm font-medium">Auto-assign user sessions</p>
-                <p className="text-xs text-muted-foreground">
-                  Off = keep current session mapping
+                <p className="text-sm text-muted-foreground">
+                  When off, users keep their current session mapping during sync and troubleshoot.
                 </p>
               </div>
               <Switch
@@ -381,11 +375,11 @@ export default function SchedulerPage() {
                 }
               />
             </div>
-            <div className="flex items-center justify-between gap-3">
-              <div className="min-w-0">
+            <div className="flex items-start justify-between gap-4 rounded-lg border border-border p-4">
+              <div className="min-w-0 space-y-1">
                 <p className="text-sm font-medium">Auto-update session proxies</p>
-                <p className="text-xs text-muted-foreground">
-                  Off = never overwrite proxies from API
+                <p className="text-sm text-muted-foreground">
+                  When off, session proxy strings are never overwritten from the external API.
                 </p>
               </div>
               <Switch
@@ -400,37 +394,35 @@ export default function SchedulerPage() {
         </Card>
       </div>
 
-      {/* Compact action buttons */}
+      {/* Full-width action buttons — same primary style */}
       <Card>
-        <CardHeader className="py-3 px-4">
-          <CardTitle className="text-base">Manual Triggers</CardTitle>
-          <CardDescription className="text-xs">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-lg">Manual Triggers</CardTitle>
+          <CardDescription>
             Runs on {target === 'all' ? 'all backends' : statusBackend.label}. Confirm before each run.
+            Daily auto schedule: 5:00 PM PST (12:00 PM UTC).
           </CardDescription>
         </CardHeader>
-        <CardContent className="px-4 pb-4 pt-0">
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
+        <CardContent>
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-7 gap-3">
             {ACTIONS.map((item) => (
               <Button
                 key={item.action}
-                variant={item.variant || 'outline'}
-                className="h-auto flex-col items-start gap-0.5 py-2.5 px-3 text-left whitespace-normal"
+                variant="default"
+                className="h-auto min-h-[88px] flex-col items-start justify-center gap-1 py-4 px-4 text-left whitespace-normal"
                 disabled={actionLoading === item.action || !!actionLoading}
                 onClick={() => handleAction(item.action, item.name)}
                 title={item.description}
               >
-                <span className="text-sm font-medium w-full">
+                <span className="text-sm font-semibold w-full">
                   {actionLoading === item.action ? 'Running…' : item.label}
                 </span>
-                <span className="text-[11px] font-normal text-muted-foreground w-full leading-snug">
+                <span className="text-xs font-normal text-primary-foreground/80 w-full leading-snug">
                   {item.description}
                 </span>
               </Button>
             ))}
           </div>
-          <p className="text-xs text-muted-foreground mt-3">
-            Daily auto schedule: 5:00 PM PST (12:00 PM UTC). Check server logs for progress.
-          </p>
         </CardContent>
       </Card>
 
