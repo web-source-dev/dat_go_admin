@@ -152,6 +152,10 @@ export interface Cookie {
   isActiveDouble?: boolean;
   isActiveMulti?: boolean;
   isActiveSwiftSolutions?: boolean;
+  /** Active for users with label=test */
+  isActiveTest?: boolean;
+  /** Quick ops flag: known working cookie */
+  isWorking?: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -171,6 +175,8 @@ export interface FreightdeskContainerSession {
   isActiveDouble?: boolean;
   isActiveMulti?: boolean;
   isActiveSwiftSolutions?: boolean;
+  isActiveTest?: boolean;
+  isWorking?: boolean;
   isActive?: boolean;
 }
 

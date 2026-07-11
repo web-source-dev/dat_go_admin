@@ -260,12 +260,16 @@ export function EditUserDialog({ open, onClose, onSuccess, onRefresh, user }: Ed
                   list="available-labels-edit"
                 />
                 <datalist id="available-labels-edit">
-                  {availableLabels.map((label) => (
-                    <option key={label} value={label} />
-                  ))}
+                  <option value="test" />
+                  <option value="swiftSolutions" />
+                  {availableLabels
+                    .filter((label) => label !== 'test' && label !== 'swiftSolutions')
+                    .map((label) => (
+                      <option key={label} value={label} />
+                    ))}
                 </datalist>
                 <p className="text-xs text-muted-foreground">
-                  Categorize user with a label (e.g., VIP, Premium, etc.)
+                  Use label <code>test</code> for test-cookie users, or <code>swiftSolutions</code> for Swift.
                 </p>
               </div>
             </div>
@@ -335,7 +339,7 @@ export function EditUserDialog({ open, onClose, onSuccess, onRefresh, user }: Ed
                   </SelectContent>
                 </Select>
                 <p className="text-xs text-muted-foreground">
-                  ZIP uses the assigned session profile. Cookie uses the active cookie for this user&apos;s plan (single/double/multi).
+                  ZIP uses the assigned session profile. Cookie uses the active cookie for this user&apos;s plan/label (single/double/multi, or test/swiftSolutions labels).
                 </p>
               </div>
 

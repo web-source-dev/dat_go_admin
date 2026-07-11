@@ -260,7 +260,12 @@ export const cookiesApi = {
     return response.data;
   },
 
-  update: async (id: string, cookieData: { label?: string; sessionId?: string | null; fileContent?: any }) => {
+  update: async (id: string, cookieData: {
+    label?: string;
+    sessionId?: string | null;
+    fileContent?: any;
+    isWorking?: boolean;
+  }) => {
     const response = await api.put(`/cookie/${id}`, cookieData);
     return response.data;
   },
@@ -277,7 +282,7 @@ export const cookiesApi = {
 
   activate: async (
     id: string,
-    channel: 'single' | 'double' | 'multi' | 'swiftSolutions' | 'dathub' = 'single'
+    channel: 'single' | 'double' | 'multi' | 'swiftSolutions' | 'test' | 'dathub' = 'single'
   ) => {
     const response = await api.post(`/cookie/${id}/activate`, { channel });
     return response.data;
@@ -285,7 +290,7 @@ export const cookiesApi = {
 
   deactivate: async (
     id: string,
-    channel: 'single' | 'double' | 'multi' | 'swiftSolutions' | 'dathub' = 'single'
+    channel: 'single' | 'double' | 'multi' | 'swiftSolutions' | 'test' | 'dathub' = 'single'
   ) => {
     const response = await api.post(`/cookie/${id}/deactivate`, { channel });
     return response.data;

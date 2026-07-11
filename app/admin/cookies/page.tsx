@@ -14,6 +14,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Switch } from '@/components/ui/switch';
 import {
   Select,
   SelectContent,
@@ -116,7 +117,20 @@ export default function CookiesPage() {
     }
   };
 
-  type CookieChannel = 'single' | 'double' | 'multi' | 'swiftSolutions';
+  const handleQuickWorkingChange = async (cookie: Cookie, isWorking: boolean) => {
+    // Optimistic update for snappy UI
+    handleCookieUpdated({ ...cookie, isWorking });
+    try {
+      const updated = await cookiesApi.update(cookie._id, { isWorking });
+      handleCookieUpdated(updated);
+      setError(null);
+    } catch (err: any) {
+      handleCookieUpdated({ ...cookie, isWorking: !isWorking });
+      setError(err.response?.data?.message || err.message || 'Failed to update working status');
+    }
+  };
+
+  type CookieChannel = 'single' | 'double' | 'multi' | 'swiftSolutions' | 'test';
 
   const handleActivateCookie = async (cookie: Cookie, channel: CookieChannel) => {
     try {
@@ -208,7 +222,7 @@ export default function CookiesPage() {
             <div>
               <h1 className="text-3xl font-bold text-foreground">Cookie Management</h1>
               <p className="text-sm text-muted-foreground mt-1">
-                Manage cookie files — enable one active file per channel (DAT Go and Swift Solutions)
+                Manage cookie files — enable one active file per channel (Single, Double, Multi, Swift, Test)
               </p>
             </div>
             <div className="flex gap-2">
@@ -325,6 +339,9 @@ export default function CookiesPage() {
                       Last Updated
                     </th>
                     <th className="px-6 py-3 text-left text-sm font-semibold text-muted-foreground">
+                      Working
+                    </th>
+                    <th className="px-6 py-3 text-left text-sm font-semibold text-muted-foreground">
                       Single
                     </th>
                     <th className="px-6 py-3 text-left text-sm font-semibold text-muted-foreground">
@@ -335,6 +352,9 @@ export default function CookiesPage() {
                     </th>
                     <th className="px-6 py-3 text-left text-sm font-semibold text-muted-foreground">
                       Swift
+                    </th>
+                    <th className="px-6 py-3 text-left text-sm font-semibold text-muted-foreground">
+                      Test
                     </th>
                     <th className="px-6 py-3 text-right text-sm font-semibold text-muted-foreground">
                       Actions
@@ -401,6 +421,22 @@ export default function CookiesPage() {
                         {cookie.lastUpdated ? formatDate(cookie.lastUpdated) : '-'}
                       </td>
                       <td className="px-6 py-4">
+                        <div className="flex items-center gap-2">
+                          <Switch
+                            checked={Boolean(cookie.isWorking)}
+                            onCheckedChange={(checked) => handleQuickWorkingChange(cookie, checked)}
+                            aria-label={`Mark ${cookie.fileName} as working`}
+                          />
+                          <span
+                            className={`text-xs font-medium ${
+                              cookie.isWorking ? 'text-green-600' : 'text-muted-foreground'
+                            }`}
+                          >
+                            {cookie.isWorking ? 'Working' : 'Not working'}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
                         {cookie.isActiveSingle ? (
                           <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-green-500/10 text-green-600 border border-green-500/30">
                             <CheckCircle2 size={14} className="mr-1" />
@@ -442,6 +478,19 @@ export default function CookiesPage() {
                       <td className="px-6 py-4">
                         {cookie.isActiveSwiftSolutions ? (
                           <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-emerald-500/10 text-emerald-600 border border-emerald-500/30">
+                            <CheckCircle2 size={14} className="mr-1" />
+                            Active
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-gray-500/10 text-gray-600 border border-gray-500/30">
+                            <Circle size={14} className="mr-1" />
+                            Inactive
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-6 py-4">
+                        {cookie.isActiveTest ? (
+                          <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-violet-500/10 text-violet-600 border border-violet-500/30">
                             <CheckCircle2 size={14} className="mr-1" />
                             Active
                           </span>
@@ -529,6 +578,32 @@ export default function CookiesPage() {
                                   Disable for Swift Solutions
                                 </DropdownMenuItem>
                               )}
+                              {!cookie.isActiveTest ? (
+                                <DropdownMenuItem
+                                  onClick={() => handleActivateCookie(cookie, 'test')}
+                                  className="cursor-pointer text-foreground hover:bg-muted"
+                                >
+                                  <CheckCircle2 size={16} className="mr-2" />
+                                  Enable for Test users
+                                </DropdownMenuItem>
+                              ) : (
+                                <DropdownMenuItem
+                                  onClick={() => handleDeactivateCookie(cookie, 'test')}
+                                  className="cursor-pointer text-foreground hover:bg-muted"
+                                >
+                                  <Circle size={16} className="mr-2" />
+                                  Disable for Test users
+                                </DropdownMenuItem>
+                              )}
+                              <DropdownMenuItem
+                                onClick={() =>
+                                  handleQuickWorkingChange(cookie, !Boolean(cookie.isWorking))
+                                }
+                                className="cursor-pointer text-foreground hover:bg-muted"
+                              >
+                                <CheckCircle2 size={16} className="mr-2" />
+                                {cookie.isWorking ? 'Mark as Not working' : 'Mark as Working'}
+                              </DropdownMenuItem>
                               <DropdownMenuItem
                                 onClick={() => handleEditCookie(cookie)}
                                 className="cursor-pointer text-foreground hover:bg-muted"

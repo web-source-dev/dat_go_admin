@@ -23,7 +23,7 @@ import { freightdeskApi } from '@/lib/api';
 import { COOKIE_LABEL_OPTIONS, CookieLabel, isAssignableCookieLabel } from '@/lib/cookieLabels';
 import { FreightdeskContainerSession, FreightdeskStatus } from '@/lib/types';
 
-type CookieChannel = 'single' | 'double' | 'multi' | 'swiftSolutions' | 'dathub';
+type CookieChannel = 'single' | 'double' | 'multi' | 'swiftSolutions' | 'test' | 'dathub';
 
 export default function FreightdeskSessionsPage() {
   const [sessions, setSessions] = useState<FreightdeskContainerSession[]>([]);
@@ -71,8 +71,11 @@ export default function FreightdeskSessionsPage() {
         return session.isActiveMulti;
       case 'swiftSolutions':
         return session.isActiveSwiftSolutions;
+      case 'test':
+        return session.isActiveTest;
       case 'dathub':
         return session.isActive;
+      case 'single':
       default:
         return session.isActiveSingle;
     }
@@ -172,6 +175,7 @@ export default function FreightdeskSessionsPage() {
                 <SelectItem value="double">Double plan</SelectItem>
                 <SelectItem value="multi">Multi plan</SelectItem>
                 <SelectItem value="swiftSolutions">Swift Solutions</SelectItem>
+                <SelectItem value="test">Test users</SelectItem>
                 <SelectItem value="dathub">DAT Go (legacy)</SelectItem>
               </SelectContent>
             </Select>
