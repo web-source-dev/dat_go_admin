@@ -5,7 +5,6 @@ import { schedulerApi, SCHEDULER_BACKENDS, type SchedulerBackendKey } from '@/li
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Separator } from '@/components/ui/separator';
 import { Switch } from '@/components/ui/switch';
 import {
   AlertDialog,
@@ -18,6 +17,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { toast } from 'sonner';
+import { RefreshCw } from 'lucide-react';
 
 interface SchedulerStatus {
   autoEnabled?: boolean;
@@ -34,10 +34,8 @@ interface SchedulerSyncOptions {
   autoUpdateSessionProxiesOnSync: boolean;
 }
 
-// Which backend(s) a trigger runs against. 'all' fans out to every backend.
 type TargetKey = SchedulerBackendKey | 'all';
 
-// Map each action to its scheduler API call (each accepts a target baseURL).
 const TRIGGERS: Record<string, (baseURL?: string) => Promise<any>> = {
   sync: schedulerApi.triggerSync,
   download: schedulerApi.triggerDownload,
@@ -48,7 +46,64 @@ const TRIGGERS: Record<string, (baseURL?: string) => Promise<any>> = {
   freightdesk: schedulerApi.triggerFreightdesk,
 };
 
-// Build a short human summary from a trigger response (per backend).
+const ACTIONS: {
+  action: string;
+  name: string;
+  label: string;
+  description: string;
+  variant?: 'default' | 'outline' | 'secondary';
+}[] = [
+  {
+    action: 'sync',
+    name: 'Session Sync',
+    label: 'Sync Sessions',
+    description: 'Sync sessions from external API',
+    variant: 'outline',
+  },
+  {
+    action: 'download',
+    name: 'Download Files',
+    label: 'Download ZIPs',
+    description: 'Download session ZIPs + extract cookies',
+    variant: 'outline',
+  },
+  {
+    action: 'full',
+    name: 'Full Sync',
+    label: 'Full Sync',
+    description: 'Sessions + downloads + FreightDesk',
+    variant: 'default',
+  },
+  {
+    action: 'freightdesk',
+    name: 'FreightDesk Import',
+    label: 'FD Import',
+    description: 'Import FreightDesk containers',
+    variant: 'outline',
+  },
+  {
+    action: 'payments',
+    name: 'Payment Check',
+    label: 'Check Payments',
+    description: 'Overdue payments + ban check',
+    variant: 'outline',
+  },
+  {
+    action: 'referrals',
+    name: 'Referral Updates',
+    label: 'Update Referrals',
+    description: 'Refresh referral discount statuses',
+    variant: 'outline',
+  },
+  {
+    action: 'backup',
+    name: 'Database backup',
+    label: 'DB Backup',
+    description: 'Copy DB to backup target URI',
+    variant: 'secondary',
+  },
+];
+
 function summarize(action: string, response: any): string | undefined {
   const data = response?.data;
   if (!data) return undefined;
@@ -72,6 +127,16 @@ function summarize(action: string, response: any): string | undefined {
   return undefined;
 }
 
+function formatShortDate(value: string, timeZone?: string) {
+  return new Date(value).toLocaleString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    ...(timeZone ? { timeZone } : {}),
+  });
+}
+
 export default function SchedulerPage() {
   const [status, setStatus] = useState<SchedulerStatus | null>(null);
   const [loading, setLoading] = useState(true);
@@ -79,10 +144,8 @@ export default function SchedulerPage() {
   const [target, setTarget] = useState<TargetKey>('primary');
   const [syncOptions, setSyncOptions] = useState<SchedulerSyncOptions | null>(null);
   const [syncOptionsLoading, setSyncOptionsLoading] = useState(false);
-  // The trigger awaiting confirmation in the dialog (null = no dialog open).
   const [pendingAction, setPendingAction] = useState<{ action: string; name: string } | null>(null);
 
-  // The backend whose status we display: the selected one, or Primary for 'all'.
   const statusBackend =
     target === 'all'
       ? SCHEDULER_BACKENDS[0]
@@ -109,7 +172,6 @@ export default function SchedulerPage() {
   const updateSyncOptions = async (patch: Partial<SchedulerSyncOptions>) => {
     try {
       setSyncOptionsLoading(true);
-      // Always write to every backend so toggles stay consistent (each has its own DB).
       const results = await Promise.allSettled(
         SCHEDULER_BACKENDS.map((b) => schedulerApi.updateSyncOptions(patch, b.url))
       );
@@ -134,9 +196,7 @@ export default function SchedulerPage() {
       if (failed.length > 0) {
         toast.warning(
           `Sync settings updated on ${ok.length}/${SCHEDULER_BACKENDS.length} backends`,
-          {
-            description: 'Some backends failed — switch target and retry if needed.',
-          }
+          { description: 'Some backends failed — switch target and retry if needed.' }
         );
       } else {
         toast.success('Sync settings updated on all backends');
@@ -154,24 +214,19 @@ export default function SchedulerPage() {
     fetchStatus();
   }, [fetchStatus]);
 
-  // Backends this trigger should run on, based on the current target selection.
   const resolveTargets = () =>
     target === 'all' ? SCHEDULER_BACKENDS : SCHEDULER_BACKENDS.filter((b) => b.key === target);
 
-  // Clicking a trigger opens the confirmation dialog first; it only runs on confirm.
   const handleAction = (action: string, actionName: string) => {
     setPendingAction({ action, name: actionName });
   };
 
-  // Runs the confirmed trigger against the selected backend(s).
   const runAction = async (action: string, actionName: string) => {
     const fn = TRIGGERS[action];
     if (!fn) return;
     const targets = resolveTargets();
 
     setActionLoading(action);
-    // Run against each selected backend independently so one failure doesn't
-    // block the others (important for the "All backends" option).
     const results = await Promise.allSettled(targets.map((b) => fn(b.url)));
 
     let anyOk = false;
@@ -195,450 +250,190 @@ export default function SchedulerPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-center">
-          <p className="mt-4 text-gray-600">Loading scheduler status...</p>
-        </div>
+      <div className="flex items-center justify-center min-h-[40vh]">
+        <p className="text-muted-foreground">Loading scheduler status...</p>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6 p-6">
-      <div>
-        <h1 className="text-3xl font-bold text-gray-900">Scheduler Management</h1>
-        <p className="text-gray-600 mt-2">Manually trigger scheduled tasks and monitor system status</p>
+    <div className="space-y-4 p-6 max-w-6xl">
+      {/* Header + backend target */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-foreground">Scheduler</h1>
+          <p className="text-sm text-muted-foreground mt-0.5">
+            Status, sync options, and manual triggers
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          {SCHEDULER_BACKENDS.map((b) => (
+            <Button
+              key={b.key}
+              size="sm"
+              variant={target === b.key ? 'default' : 'outline'}
+              onClick={() => setTarget(b.key)}
+            >
+              {b.label}
+            </Button>
+          ))}
+          <Button
+            size="sm"
+            variant={target === 'all' ? 'default' : 'outline'}
+            onClick={() => setTarget('all')}
+          >
+            All
+          </Button>
+          <Button size="sm" variant="ghost" onClick={fetchStatus} title="Refresh status">
+            <RefreshCw size={16} />
+          </Button>
+        </div>
       </div>
 
-      {/* Backend target selector */}
+      <p className="text-xs text-muted-foreground -mt-1">
+        Target:{' '}
+        {target === 'all' ? (
+          <span>all backends</span>
+        ) : (
+          <>
+            <span className="font-medium">{statusBackend.label}</span>{' '}
+            <code className="bg-muted px-1 rounded">{statusBackend.url}</code>
+          </>
+        )}
+      </p>
+
+      {/* Compact status + sync options */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <Card>
+          <CardHeader className="py-3 px-4">
+            <CardTitle className="text-base flex items-center gap-2">
+              Status
+              <Badge variant="outline">{statusBackend.label}</Badge>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="px-4 pb-4 pt-0 space-y-3">
+            <div className="flex flex-wrap gap-2">
+              <Badge variant={status?.autoEnabled ? 'default' : 'secondary'}>
+                Auto: {status?.autoEnabled ? 'On' : 'Paused'}
+              </Badge>
+              <Badge variant={status?.isScheduled ? 'default' : 'secondary'}>
+                Cron: {status?.isScheduled ? 'Active' : 'Inactive'}
+              </Badge>
+              <Badge variant={status?.isRunning ? 'destructive' : 'outline'}>
+                Running: {status?.isRunning ? 'Yes' : 'No'}
+              </Badge>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 text-sm">
+              <div className="flex justify-between gap-2">
+                <span className="text-muted-foreground">Next (UTC)</span>
+                <span className="font-medium">
+                  {status?.nextRun ? formatShortDate(status.nextRun, 'UTC') : '—'}
+                </span>
+              </div>
+              <div className="flex justify-between gap-2">
+                <span className="text-muted-foreground">Next (PST)</span>
+                <span className="font-medium">
+                  {status?.nextRunPST
+                    ? `${formatShortDate(status.nextRunPST.replace(' PST', ''), 'Asia/Karachi')} PST`
+                    : '—'}
+                </span>
+              </div>
+              <div className="flex justify-between gap-2 sm:col-span-2">
+                <span className="text-muted-foreground">Next DB backup</span>
+                <span className="font-medium">
+                  {status?.nextBackupRun
+                    ? formatShortDate(String(status.nextBackupRun), 'UTC')
+                    : '—'}
+                </span>
+              </div>
+            </div>
+
+            {!status?.autoEnabled && (
+              <p className="text-xs text-muted-foreground rounded-md bg-muted/50 px-2 py-1.5">
+                Set <code className="bg-muted px-1 rounded">SCHEDULER_AUTO_ENABLED=true</code> to
+                resume daily cron. Manual triggers still work.
+              </p>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="py-3 px-4">
+            <CardTitle className="text-base">Sync Options</CardTitle>
+            <CardDescription className="text-xs">
+              Saved to all backends. Applies to sync and troubleshoot.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="px-4 pb-4 pt-0 space-y-3">
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-sm font-medium">Auto-assign user sessions</p>
+                <p className="text-xs text-muted-foreground">
+                  Off = keep current session mapping
+                </p>
+              </div>
+              <Switch
+                checked={Boolean(syncOptions?.autoAssignUserSessionsOnSync)}
+                disabled={syncOptionsLoading || !syncOptions}
+                onCheckedChange={(checked) =>
+                  updateSyncOptions({ autoAssignUserSessionsOnSync: checked })
+                }
+              />
+            </div>
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-sm font-medium">Auto-update session proxies</p>
+                <p className="text-xs text-muted-foreground">
+                  Off = never overwrite proxies from API
+                </p>
+              </div>
+              <Switch
+                checked={Boolean(syncOptions?.autoUpdateSessionProxiesOnSync)}
+                disabled={syncOptionsLoading || !syncOptions}
+                onCheckedChange={(checked) =>
+                  updateSyncOptions({ autoUpdateSessionProxiesOnSync: checked })
+                }
+              />
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Compact action buttons */}
       <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">Run on backend</CardTitle>
-          <CardDescription>
-            Choose which backend deployment the triggers below run on, or run them on all three at once.
-            Each backend runs its own scheduler.
+        <CardHeader className="py-3 px-4">
+          <CardTitle className="text-base">Manual Triggers</CardTitle>
+          <CardDescription className="text-xs">
+            Runs on {target === 'all' ? 'all backends' : statusBackend.label}. Confirm before each run.
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-3">
-          <div className="flex flex-wrap items-center gap-2">
-            {SCHEDULER_BACKENDS.map((b) => (
+        <CardContent className="px-4 pb-4 pt-0">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
+            {ACTIONS.map((item) => (
               <Button
-                key={b.key}
-                size="sm"
-                variant={target === b.key ? 'default' : 'outline'}
-                onClick={() => setTarget(b.key)}
+                key={item.action}
+                variant={item.variant || 'outline'}
+                className="h-auto flex-col items-start gap-0.5 py-2.5 px-3 text-left whitespace-normal"
+                disabled={actionLoading === item.action || !!actionLoading}
+                onClick={() => handleAction(item.action, item.name)}
+                title={item.description}
               >
-                {b.label}
+                <span className="text-sm font-medium w-full">
+                  {actionLoading === item.action ? 'Running…' : item.label}
+                </span>
+                <span className="text-[11px] font-normal text-muted-foreground w-full leading-snug">
+                  {item.description}
+                </span>
               </Button>
             ))}
-            <Button
-              size="sm"
-              variant={target === 'all' ? 'default' : 'outline'}
-              onClick={() => setTarget('all')}
-            >
-              All backends
-            </Button>
           </div>
-          <div className="text-xs text-muted-foreground space-y-1">
-            {target === 'all' ? (
-              SCHEDULER_BACKENDS.map((b) => (
-                <div key={b.key}>
-                  <span className="font-medium">{b.label}:</span>{' '}
-                  <code className="bg-muted px-1 rounded">{b.url}</code>
-                </div>
-              ))
-            ) : (
-              <div>
-                <span className="font-medium">{statusBackend.label}:</span>{' '}
-                <code className="bg-muted px-1 rounded">{statusBackend.url}</code>
-              </div>
-            )}
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Status Card */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            Scheduler Status
-            <Badge variant="outline">{statusBackend.label}</Badge>
-          </CardTitle>
-          <CardDescription>
-            Current state and next scheduled run for the {statusBackend.label} backend
-            {target === 'all' ? ' (status is shown per backend; All runs triggers on every backend)' : ''}
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex items-center justify-between">
-            <span className="text-sm font-medium">Auto scheduler (cron):</span>
-            <Badge variant={status?.autoEnabled ? 'default' : 'secondary'}>
-              {status?.autoEnabled ? 'Enabled' : 'Paused'}
-            </Badge>
-          </div>
-
-          {!status?.autoEnabled && (
-            <p className="text-sm text-muted-foreground rounded-lg bg-muted/50 px-3 py-2">
-              Set <code className="text-xs bg-muted px-1 rounded">SCHEDULER_AUTO_ENABLED=true</code> on the
-              server and restart to resume daily runs. Manual triggers below still work.
-            </p>
-          )}
-
-          <div className="flex items-center justify-between">
-            <span className="text-sm font-medium">Cron jobs registered:</span>
-            <Badge variant={status?.isScheduled ? 'default' : 'secondary'}>
-              {status?.isScheduled ? 'Active' : 'Inactive'}
-            </Badge>
-          </div>
-
-          <div className="flex items-center justify-between">
-            <span className="text-sm font-medium">Currently Running:</span>
-            <Badge variant={status?.isRunning ? 'destructive' : 'outline'}>
-              {status?.isRunning ? 'Yes' : 'No'}
-            </Badge>
-          </div>
-
-          {status?.nextRun && (
-            <div className="flex items-center justify-between">
-              <span className="text-sm font-medium">Next Run (UTC):</span>
-              <span className="text-sm text-gray-600">
-                {new Date(status.nextRun).toLocaleDateString('en-US', {
-                  weekday: 'short',
-                  year: 'numeric',
-                  month: 'short',
-                  day: 'numeric',
-                  hour: '2-digit',
-                  minute: '2-digit',
-                  second: '2-digit'
-                })}
-              </span>
-            </div>
-          )}
-
-          {status?.nextRunPST && (
-            <div className="flex items-center justify-between">
-              <span className="text-sm font-medium">Next Run (PST):</span>
-              <span className="text-sm text-gray-600">
-                {new Date(status.nextRunPST.replace(' PST', '')).toLocaleDateString('en-US', {
-                  weekday: 'short',
-                  year: 'numeric',
-                  month: 'short',
-                  day: 'numeric',
-                  hour: '2-digit',
-                  minute: '2-digit',
-                  second: '2-digit',
-                  timeZone: 'Asia/Karachi'
-                })} PST
-              </span>
-            </div>
-          )}
-
-          {status?.nextBackupRun != null && status.nextBackupRun !== undefined && (
-            <div className="flex items-center justify-between">
-              <span className="text-sm font-medium">Next DB backup (UTC):</span>
-              <span className="text-sm text-gray-600">
-                {new Date(status.nextBackupRun).toLocaleString('en-US', {
-                  weekday: 'short',
-                  year: 'numeric',
-                  month: 'short',
-                  day: 'numeric',
-                  hour: '2-digit',
-                  minute: '2-digit',
-                  second: '2-digit',
-                  timeZone: 'UTC'
-                })}
-              </span>
-            </div>
-          )}
-
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={fetchStatus}
-            className="w-full"
-          >
-            Refresh Status
-          </Button>
-        </CardContent>
-      </Card>
-
-      {/* Session sync behavior */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Session Sync Behavior</CardTitle>
-          <CardDescription>
-            Applies to scheduler sync and user troubleshoot. Changes are saved to all backends.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-5">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <p className="text-sm font-medium">Auto-assign users to another session</p>
-              <p className="text-xs text-muted-foreground">
-                When OFF, users keep their current session — sync will not reassign them, and
-                troubleshoot will only retry their assigned session.
-              </p>
-            </div>
-            <Switch
-              checked={Boolean(syncOptions?.autoAssignUserSessionsOnSync)}
-              disabled={syncOptionsLoading || !syncOptions}
-              onCheckedChange={(checked) =>
-                updateSyncOptions({ autoAssignUserSessionsOnSync: checked })
-              }
-            />
-          </div>
-
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <p className="text-sm font-medium">Auto-update session proxies from external API</p>
-              <p className="text-xs text-muted-foreground">
-                When OFF, session proxy strings are never overwritten by sync or troubleshoot.
-                Edit proxies only from the admin sessions page.
-              </p>
-            </div>
-            <Switch
-              checked={Boolean(syncOptions?.autoUpdateSessionProxiesOnSync)}
-              disabled={syncOptionsLoading || !syncOptions}
-              onCheckedChange={(checked) =>
-                updateSyncOptions({ autoUpdateSessionProxiesOnSync: checked })
-              }
-            />
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Manual Trigger Actions */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* Session Sync */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              Session Sync
-            </CardTitle>
-            <CardDescription>
-              Sync sessions from external API, create new sessions, update existing ones
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Button
-              onClick={() => handleAction('sync', 'Session Sync')}
-              disabled={actionLoading === 'sync'}
-              className="w-full"
-            >
-              {actionLoading === 'sync' ? (
-                <>
-                  Syncing...
-                </>
-              ) : (
-                <>
-                  Trigger Sync
-                </>
-              )}
-            </Button>
-          </CardContent>
-        </Card>
-
-        {/* Download Files */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              Download Files
-            </CardTitle>
-            <CardDescription>
-              Download ZIP files for all sessions and extract cookies
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Button
-              onClick={() => handleAction('download', 'Download Files')}
-              disabled={actionLoading === 'download'}
-              className="w-full"
-            >
-              {actionLoading === 'download' ? (
-                <>
-                  Downloading...
-                </>
-              ) : (
-                <>
-                  Trigger Download
-                </>
-              )}
-            </Button>
-          </CardContent>
-        </Card>
-
-        {/* Full Sync */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              Full Sync
-            </CardTitle>
-            <CardDescription>
-              Complete sync: sessions + downloads + FreightDesk containers
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Button
-              onClick={() => handleAction('full', 'Full Sync')}
-              disabled={actionLoading === 'full'}
-              className="w-full"
-              variant="default"
-            >
-              {actionLoading === 'full' ? (
-                <>
-                  Running Full Sync...
-                </>
-              ) : (
-                <>
-                  Trigger Full Sync
-                </>
-              )}
-            </Button>
-          </CardContent>
-        </Card>
-
-        {/* FreightDesk Containers */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              FreightDesk Containers
-            </CardTitle>
-            <CardDescription>
-              Import all FD container sessions into cookie files (labels preserved on re-import)
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Button
-              onClick={() => handleAction('freightdesk', 'FreightDesk Import')}
-              disabled={actionLoading === 'freightdesk'}
-              className="w-full"
-              variant="outline"
-            >
-              {actionLoading === 'freightdesk' ? 'Importing FD Containers...' : 'Import FD Containers'}
-            </Button>
-          </CardContent>
-        </Card>
-
-        {/* Payment Check */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              Payment Check
-            </CardTitle>
-            <CardDescription>
-              Check for overdue payments and ban users if necessary
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Button
-              onClick={() => handleAction('payments', 'Payment Check')}
-              disabled={actionLoading === 'payments'}
-              className="w-full"
-              variant="outline"
-            >
-              {actionLoading === 'payments' ? (
-                <>
-                  Checking...
-                </>
-              ) : (
-                <>
-                Check Payments
-                </>
-              )}
-            </Button>
-          </CardContent>
-        </Card>
-
-        {/* Referral Updates */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              Referral Updates
-            </CardTitle>
-            <CardDescription>
-              Update referral discount statuses (runs monthly automatically)
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Button
-              onClick={() => handleAction('referrals', 'Referral Updates')}
-              disabled={actionLoading === 'referrals'}
-              className="w-full"
-              variant="outline"
-            >
-              {actionLoading === 'referrals' ? (
-                <>
-                  Updating...
-                </>
-              ) : (
-                <>
-                  Update Referrals
-                </>
-              )}
-            </Button>
-          </CardContent>
-        </Card>
-
-        {/* Database backup */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              Database backup
-            </CardTitle>
-            <CardDescription>
-              Copy local database to the online backup target (payment proofs embedded as base64). Requires{' '}
-              <code className="text-xs bg-muted px-1 rounded">MONGODB_BACKUP_TARGET_URI</code> on the API server.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Button
-              onClick={() => handleAction('backup', 'Database backup')}
-              disabled={actionLoading === 'backup'}
-              className="w-full"
-              variant="secondary"
-            >
-              {actionLoading === 'backup' ? (
-                <>Backing up...</>
-              ) : (
-                <>Run database backup</>
-              )}
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Information */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            Information
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3 text-sm text-gray-600">
-          <p>
-            <strong>Automatic Schedule:</strong> Runs daily at 5:00 PM Pakistan Standard Time (12:00 PM UTC)
-          </p>
-          <p>
-            <strong>Full Sync:</strong> Recommended for manual runs - syncs sessions and downloads files
-          </p>
-          <p>
-            <strong>Payment Check:</strong> Only bans users for current month overdue payments
-          </p>
-          <p>
-            <strong>Referral Updates:</strong> Runs automatically on the 1st of each month
-          </p>
-          <p>
-            <strong>Database backup:</strong> Optional daily job when the server has an online MongoDB URI configured;
-            manual run uses the same job as the CLI <code className="text-xs bg-muted px-1 rounded">scheduler:backup</code>.
-          </p>
-          <Separator />
-          <p className="text-xs">
-            All manual triggers run asynchronously. Check the server logs for detailed progress.
+          <p className="text-xs text-muted-foreground mt-3">
+            Daily auto schedule: 5:00 PM PST (12:00 PM UTC). Check server logs for progress.
           </p>
         </CardContent>
       </Card>
 
-      {/* Confirmation: asks whether to run on all backends or the selected one before triggering */}
       <AlertDialog
         open={!!pendingAction}
         onOpenChange={(open) => {
