@@ -134,6 +134,22 @@ export const extensionProxyApi = {
       swiftSolutions?: boolean;
       datHub?: boolean;
     };
+    productProxy?: Partial<
+      Record<
+        import('./types').ExtensionProxyProductKey,
+        {
+          source?: import('./types').ExtensionProxySource;
+          sessionId?: string | null;
+          proxyIpId?: string | null;
+          customProxy?: {
+            host?: string;
+            port?: number | string;
+            username?: string;
+            password?: string;
+          };
+        }
+      >
+    >;
     customProxy?: {
       host?: string;
       port?: number | string;

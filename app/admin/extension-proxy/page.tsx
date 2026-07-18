@@ -26,7 +26,13 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { extensionProxyApi, sessionsApi } from '@/lib/api';
-import type { ExtensionProxyAdminConfig, ExtensionProxyPoolItem, Session } from '@/lib/types';
+import type {
+  ExtensionProxyAdminConfig,
+  ExtensionProxyPoolItem,
+  ExtensionProxyProductKey,
+  ExtensionProxySource,
+  Session,
+} from '@/lib/types';
 
 function maskProxyPreview(proxy: string) {
   if (!proxy) return '—';
@@ -35,7 +41,60 @@ function maskProxyPreview(proxy: string) {
   return `${parts[0]}:${parts[1]}`;
 }
 
-type ProxySource = 'env' | 'session' | 'custom' | 'proxyPool';
+type ProxySource = ExtensionProxySource;
+type ProductProxyForm = {
+  enabled: boolean;
+  source: ProxySource;
+  sessionId: string;
+  proxyIpId: string;
+  customHost: string;
+  customPort: string;
+  customUsername: string;
+  customPassword: string;
+};
+
+const PRODUCT_OPTIONS: Array<{
+  key: ExtensionProxyProductKey;
+  label: string;
+  description: string;
+}> = [
+  { key: 'datGo', label: 'DAT GO', description: 'dat-go extension' },
+  { key: 'swiftSolutions', label: 'Swift Solutions', description: 'swift-solutions extension' },
+  { key: 'datHub', label: 'DAT Hub', description: 'dat-hub extension' },
+];
+
+const createEmptyProductProxy = (): Record<ExtensionProxyProductKey, ProductProxyForm> => ({
+  datGo: {
+    enabled: true,
+    source: 'env',
+    sessionId: '',
+    proxyIpId: '',
+    customHost: '',
+    customPort: '',
+    customUsername: '',
+    customPassword: '',
+  },
+  swiftSolutions: {
+    enabled: true,
+    source: 'env',
+    sessionId: '',
+    proxyIpId: '',
+    customHost: '',
+    customPort: '',
+    customUsername: '',
+    customPassword: '',
+  },
+  datHub: {
+    enabled: true,
+    source: 'env',
+    sessionId: '',
+    proxyIpId: '',
+    customHost: '',
+    customPort: '',
+    customUsername: '',
+    customPassword: '',
+  },
+});
 
 export default function ExtensionProxyPage() {
   const [config, setConfig] = useState<ExtensionProxyAdminConfig | null>(null);
@@ -49,9 +108,8 @@ export default function ExtensionProxyPage() {
   const [customPort, setCustomPort] = useState('');
   const [customUsername, setCustomUsername] = useState('');
   const [customPassword, setCustomPassword] = useState('');
-  const [productDatGo, setProductDatGo] = useState(true);
-  const [productSwift, setProductSwift] = useState(true);
-  const [productDatHub, setProductDatHub] = useState(true);
+  const [productProxy, setProductProxy] =
+    useState<Record<ExtensionProxyProductKey, ProductProxyForm>>(createEmptyProductProxy);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -65,9 +123,25 @@ export default function ExtensionProxyPage() {
     setCustomPort(data.custom?.port ? String(data.custom.port) : '');
     setCustomUsername(data.custom?.username || '');
     setCustomPassword(data.custom?.password || '');
-    setProductDatGo(data.productEnabled?.datGo !== false);
-    setProductSwift(data.productEnabled?.swiftSolutions !== false);
-    setProductDatHub(data.productEnabled?.datHub !== false);
+    const nextProductProxy = createEmptyProductProxy();
+    PRODUCT_OPTIONS.forEach((product) => {
+      const productConfig = data.productProxy?.[product.key];
+      nextProductProxy[product.key] = {
+        enabled: productConfig?.enabled ?? (data.productEnabled?.[product.key] !== false),
+        source: productConfig?.source || data.source,
+        sessionId: productConfig?.sessionId || data.sessionId || '',
+        proxyIpId: productConfig?.proxyIpId || data.proxyIpId || '',
+        customHost: productConfig?.custom?.host || data.custom?.host || '',
+        customPort: productConfig?.custom?.port
+          ? String(productConfig.custom.port)
+          : data.custom?.port
+            ? String(data.custom.port)
+            : '',
+        customUsername: productConfig?.custom?.username || data.custom?.username || '',
+        customPassword: productConfig?.custom?.password || data.custom?.password || '',
+      };
+    });
+    setProductProxy(nextProductProxy);
   };
 
   const loadData = useCallback(async () => {
@@ -112,17 +186,47 @@ export default function ExtensionProxyPage() {
     });
   }, [availableProxies, poolSearch]);
 
+  const updateProductProxy = (
+    productKey: ExtensionProxyProductKey,
+    patch: Partial<ProductProxyForm>
+  ) => {
+    setProductProxy((current) => ({
+      ...current,
+      [productKey]: {
+        ...current[productKey],
+        ...patch,
+      },
+    }));
+  };
+
   const buildPayload = () => {
     const payload: Parameters<typeof extensionProxyApi.updateConfig>[0] = {
       enabled,
       source,
       sessionId: source === 'session' ? sessionId || null : null,
       proxyIpId: source === 'proxyPool' ? proxyIpId || null : null,
-      productEnabled: {
-        datGo: productDatGo,
-        swiftSolutions: productSwift,
-        datHub: productDatHub,
-      },
+      productEnabled: Object.fromEntries(
+        PRODUCT_OPTIONS.map((product) => [product.key, productProxy[product.key].enabled])
+      ) as Record<ExtensionProxyProductKey, boolean>,
+      productProxy: Object.fromEntries(
+        PRODUCT_OPTIONS.map((product) => {
+          const form = productProxy[product.key];
+          return [
+            product.key,
+            {
+              source: form.source,
+              sessionId: form.source === 'session' ? form.sessionId || null : null,
+              proxyIpId: form.source === 'proxyPool' ? form.proxyIpId || null : null,
+              customProxy: {
+                host: form.customHost,
+                port: form.customPort,
+                username: form.customUsername,
+                password: form.customPassword,
+              },
+            },
+          ];
+        })
+      ) as Parameters<typeof extensionProxyApi.updateConfig>[0]['productProxy'],
     };
 
     if (source === 'custom' || customHost || customPort || customUsername || customPassword) {
@@ -175,7 +279,7 @@ export default function ExtensionProxyPage() {
     try {
       const data = await extensionProxyApi.useProxyIp(proxy._id);
       applyConfig(data);
-      toast.success(`Extensions now use container ${proxy.container} (${proxy.host}:${proxy.port})`);
+      toast.success(`Default proxy now uses container ${proxy.container} (${proxy.host}:${proxy.port})`);
     } catch (err: any) {
       toast.error(err.response?.data?.message || err.message || 'Failed to apply proxy');
     } finally {
@@ -193,7 +297,7 @@ export default function ExtensionProxyPage() {
         proxyIpId: null,
       });
       applyConfig(data);
-      toast.success('Extensions now use the server .env proxy');
+      toast.success('Default proxy now uses the server .env proxy');
     } catch (err: any) {
       toast.error(err.response?.data?.message || err.message || 'Failed to switch');
     } finally {
@@ -202,11 +306,21 @@ export default function ExtensionProxyPage() {
   };
 
   const customValid = Boolean(customHost.trim() && parseInt(customPort, 10) > 0);
+  const productHasInvalidSelection = PRODUCT_OPTIONS.some((product) => {
+    const form = productProxy[product.key];
+    const productCustomValid = Boolean(form.customHost.trim() && parseInt(form.customPort, 10) > 0);
+    return (
+      (form.source === 'session' && !form.sessionId) ||
+      (form.source === 'custom' && !productCustomValid) ||
+      (form.source === 'proxyPool' && !form.proxyIpId)
+    );
+  });
   const saveDisabled =
     saving ||
     (source === 'session' && !sessionId) ||
     (source === 'custom' && !customValid) ||
-    (source === 'proxyPool' && !proxyIpId);
+    (source === 'proxyPool' && !proxyIpId) ||
+    productHasInvalidSelection;
 
   if (loading) {
     return (
@@ -244,7 +358,7 @@ export default function ExtensionProxyPage() {
           <div className="flex items-start gap-3 rounded-lg border border-green-500/30 bg-green-500/10 px-4 py-3">
             <CheckCircle2 className="h-5 w-5 text-green-600 shrink-0 mt-0.5" />
             <div>
-              <p className="font-medium text-foreground">Active for extensions</p>
+              <p className="font-medium text-foreground">Default proxy active</p>
               <p className="text-sm text-muted-foreground mt-0.5">
                 Source: <span className="capitalize">{active.source === 'proxyPool' ? 'proxy pool' : active.source}</span>
                 {' · '}
@@ -274,32 +388,160 @@ export default function ExtensionProxyPage() {
           </div>
 
           <div className="space-y-3 rounded-lg border border-border bg-muted/20 p-4">
-            <p className="font-medium text-foreground">Proxy by extension product</p>
-            <p className="text-sm text-muted-foreground">
-              Turn off proxy for every user on that extension build (independent of per-user settings below).
-            </p>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <div className="flex items-center justify-between gap-3 rounded-lg border border-border bg-card px-4 py-3">
-                <div>
-                  <p className="text-sm font-medium">DAT GO</p>
-                  <p className="text-xs text-muted-foreground">dat-go extension</p>
-                </div>
-                <Switch checked={productDatGo} onCheckedChange={setProductDatGo} />
-              </div>
-              <div className="flex items-center justify-between gap-3 rounded-lg border border-border bg-card px-4 py-3">
-                <div>
-                  <p className="text-sm font-medium">Swift Solutions</p>
-                  <p className="text-xs text-muted-foreground">swift-solutions extension</p>
-                </div>
-                <Switch checked={productSwift} onCheckedChange={setProductSwift} />
-              </div>
-              <div className="flex items-center justify-between gap-3 rounded-lg border border-border bg-card px-4 py-3">
-                <div>
-                  <p className="text-sm font-medium">DAT Hub</p>
-                  <p className="text-xs text-muted-foreground">dat-hub extension</p>
-                </div>
-                <Switch checked={productDatHub} onCheckedChange={setProductDatHub} />
-              </div>
+            <div>
+              <p className="font-medium text-foreground">Proxy by extension product</p>
+              <p className="text-sm text-muted-foreground">
+                Assign a separate proxy source for each extension build. Per-user proxy permission still applies.
+              </p>
+            </div>
+            <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+              {PRODUCT_OPTIONS.map((product) => {
+                const form = productProxy[product.key];
+                const productConfig = config?.productProxy?.[product.key];
+                const productCustomValid = Boolean(
+                  form.customHost.trim() && parseInt(form.customPort, 10) > 0
+                );
+
+                return (
+                  <div
+                    key={product.key}
+                    className="space-y-4 rounded-lg border border-border bg-card p-4"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-medium">{product.label}</p>
+                        <p className="text-xs text-muted-foreground">{product.description}</p>
+                      </div>
+                      <Switch
+                        checked={form.enabled}
+                        onCheckedChange={(checked) => updateProductProxy(product.key, { enabled: checked })}
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className="text-xs font-medium text-muted-foreground">Proxy source</label>
+                      <Select
+                        value={form.source}
+                        onValueChange={(value) =>
+                          updateProductProxy(product.key, { source: value as ProxySource })
+                        }
+                      >
+                        <SelectTrigger className="bg-background">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="env">Server .env</SelectItem>
+                          <SelectItem value="proxyPool">Proxy pool</SelectItem>
+                          <SelectItem value="session">DAT session</SelectItem>
+                          <SelectItem value="custom">Custom proxy</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {form.source === 'proxyPool' && (
+                      <div className="space-y-2">
+                        <label className="text-xs font-medium text-muted-foreground">Pool proxy</label>
+                        <Select
+                          value={form.proxyIpId}
+                          onValueChange={(value) => updateProductProxy(product.key, { proxyIpId: value })}
+                        >
+                          <SelectTrigger className="bg-background">
+                            <SelectValue placeholder="Select pool proxy…" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {availableProxies.map((p) => (
+                              <SelectItem key={p._id} value={p._id} disabled={!p.isActive}>
+                                {p.container} — {p.host}:{p.port}
+                                {!p.isActive ? ' (inactive)' : ''}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
+
+                    {form.source === 'session' && (
+                      <div className="space-y-2">
+                        <label className="text-xs font-medium text-muted-foreground">DAT session</label>
+                        <Select
+                          value={form.sessionId}
+                          onValueChange={(value) => updateProductProxy(product.key, { sessionId: value })}
+                        >
+                          <SelectTrigger className="bg-background">
+                            <SelectValue placeholder="Select session…" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {sessions.map((s) => (
+                              <SelectItem key={s._id} value={s._id}>
+                                {s.name} — {maskProxyPreview(s.proxy)}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
+
+                    {form.source === 'custom' && (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-1 gap-3">
+                        <Input
+                          placeholder="Host"
+                          value={form.customHost}
+                          onChange={(e) =>
+                            updateProductProxy(product.key, { customHost: e.target.value })
+                          }
+                          className="bg-background font-mono text-sm"
+                        />
+                        <Input
+                          type="number"
+                          placeholder="Port"
+                          value={form.customPort}
+                          onChange={(e) =>
+                            updateProductProxy(product.key, { customPort: e.target.value })
+                          }
+                          className="bg-background font-mono text-sm"
+                        />
+                        <Input
+                          placeholder="Username"
+                          value={form.customUsername}
+                          onChange={(e) =>
+                            updateProductProxy(product.key, { customUsername: e.target.value })
+                          }
+                          className="bg-background font-mono text-sm"
+                        />
+                        <Input
+                          type="password"
+                          placeholder="Password"
+                          value={form.customPassword}
+                          onChange={(e) =>
+                            updateProductProxy(product.key, { customPassword: e.target.value })
+                          }
+                          className="bg-background font-mono text-sm"
+                        />
+                        {!productCustomValid && (
+                          <p className="text-xs text-destructive">Custom proxy needs host and port.</p>
+                        )}
+                      </div>
+                    )}
+
+                    {productConfig?.active && (
+                      <div className="rounded-md bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+                        {productConfig.active.enabled && !productConfig.active.error ? (
+                          <span>
+                            Active: {productConfig.active.host}:{productConfig.active.port}
+                            {productConfig.active.container
+                              ? ` · container ${productConfig.active.container}`
+                              : ''}
+                          </span>
+                        ) : productConfig.active.error ? (
+                          <span className="text-destructive">{productConfig.active.error}</span>
+                        ) : (
+                          <span>Proxy disabled or not configured.</span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </div>
 
@@ -509,7 +751,7 @@ export default function ExtensionProxyPage() {
                 Imported proxy pool
               </h2>
               <p className="text-sm text-muted-foreground mt-1">
-                {availableProxies.length} proxies in database — click Use to apply immediately
+                {availableProxies.length} proxies in database — click Use to apply as the default proxy
               </p>
             </div>
             <div className="relative w-full sm:w-64">
@@ -580,7 +822,7 @@ export default function ExtensionProxyPage() {
                             disabled={saving || !proxy.isActive || isActive}
                             onClick={() => handleUseProxyIp(proxy)}
                           >
-                            {isActive ? 'In use' : 'Use for extensions'}
+                            {isActive ? 'In use' : 'Use as default'}
                           </Button>
                         </td>
                       </tr>

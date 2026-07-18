@@ -317,9 +317,44 @@ export interface ExtensionProxyPoolItem {
   proxyPreview: string;
 }
 
+export type ExtensionProxySource = 'env' | 'session' | 'custom' | 'proxyPool';
+export type ExtensionProxyProductKey = 'datGo' | 'swiftSolutions' | 'datHub';
+
+export interface ExtensionProxyCustomConfig {
+  host: string;
+  port: number;
+  username: string;
+  password: string;
+  configured: boolean;
+}
+
+export interface ExtensionProxyProductConfig {
+  enabled: boolean;
+  source: ExtensionProxySource;
+  sessionId: string | null;
+  proxyIpId: string | null;
+  session: {
+    _id: string;
+    name: string;
+    proxyPreview: string;
+  } | null;
+  proxyIp: ExtensionProxyPoolItem | null;
+  custom: ExtensionProxyCustomConfig;
+  usesGlobal: boolean;
+  active: {
+    source: ExtensionProxySource;
+    host: string;
+    port: number;
+    username: string;
+    enabled: boolean;
+    error: string | null;
+    container?: string | null;
+  };
+}
+
 export interface ExtensionProxyAdminConfig {
   enabled: boolean;
-  source: 'env' | 'session' | 'custom' | 'proxyPool';
+  source: ExtensionProxySource;
   sessionId: string | null;
   proxyIpId: string | null;
   session: {
@@ -334,13 +369,8 @@ export interface ExtensionProxyAdminConfig {
     swiftSolutions: boolean;
     datHub: boolean;
   };
-  custom: {
-    host: string;
-    port: number;
-    username: string;
-    password: string;
-    configured: boolean;
-  };
+  productProxy: Record<ExtensionProxyProductKey, ExtensionProxyProductConfig>;
+  custom: ExtensionProxyCustomConfig;
   env: {
     host: string;
     port: number;
@@ -349,7 +379,7 @@ export interface ExtensionProxyAdminConfig {
     configured: boolean;
   };
   active: {
-    source: 'env' | 'session' | 'custom' | 'proxyPool';
+    source: ExtensionProxySource;
     host: string;
     port: number;
     username: string;
