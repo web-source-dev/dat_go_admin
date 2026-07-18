@@ -266,7 +266,7 @@ export default function ExtensionProxyPage() {
         },
       });
       applyConfig(data);
-      toast.success('Custom proxy details saved');
+      toast.success('Custom proxy saved to the proxy pool');
     } catch (err: any) {
       toast.error(err.response?.data?.message || err.message || 'Failed to save custom proxy');
     } finally {
@@ -433,7 +433,7 @@ export default function ExtensionProxyPage() {
                           <SelectItem value="env">Server .env</SelectItem>
                           <SelectItem value="proxyPool">Proxy pool</SelectItem>
                           <SelectItem value="session">DAT session</SelectItem>
-                          <SelectItem value="custom">Custom proxy</SelectItem>
+                          <SelectItem value="custom">Custom proxy (saves to pool)</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
@@ -519,6 +519,11 @@ export default function ExtensionProxyPage() {
                         />
                         {!productCustomValid && (
                           <p className="text-xs text-destructive">Custom proxy needs host and port.</p>
+                        )}
+                        {productCustomValid && (
+                          <p className="text-xs text-muted-foreground">
+                            Saving stores this proxy in the pool for later selection.
+                          </p>
                         )}
                       </div>
                     )}
@@ -621,7 +626,9 @@ export default function ExtensionProxyPage() {
                   <Wrench className="h-4 w-4" />
                   Custom proxy
                 </div>
-                <p className="text-xs text-muted-foreground mt-2">Manually entered credentials</p>
+                <p className="text-xs text-muted-foreground mt-2">
+                  Enter credentials — saved into the proxy pool for reuse
+                </p>
                 {config?.custom?.configured && (
                   <p className="text-xs font-mono mt-2 text-foreground">
                     {config.custom.host}:{config.custom.port}
@@ -674,6 +681,9 @@ export default function ExtensionProxyPage() {
                 <Pencil className="h-4 w-4" />
                 Custom proxy details
               </div>
+              <p className="text-xs text-muted-foreground">
+                Saving adds this proxy to the imported proxy pool (provider: Custom) so you can select it later.
+              </p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-1.5">
                   <label className="text-sm text-foreground">Host</label>
