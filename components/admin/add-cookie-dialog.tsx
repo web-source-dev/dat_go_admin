@@ -19,7 +19,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { cookiesApi, sessionsApi } from '@/lib/api';
+import { cookiesApi, sessionsApi, SCHEDULER_BACKENDS } from '@/lib/api';
 import { useToast } from '@/hooks/use-toast';
 import { Cookie, DATSession } from '@/lib/types';
 import { AssignableCookieLabel, COOKIE_LABEL_OPTIONS } from '@/lib/cookieLabels';
@@ -152,21 +152,54 @@ export function AddCookieDialog({ open, onClose, onSuccess, onRefresh }: AddCook
 
     setLoading(true);
     try {
-      const response = await cookiesApi.create({
+      const payload = {
         fileName: formData.fileName || undefined,
         label: formData.label,
         sessionId: formData.sessionId || undefined,
         fileContent: parsedContent,
-      });
+      };
 
+      // Every backend (primary/backup/fallback) runs its own separate DB, so a
+      // manual upload has to be pushed to each one individually or it's stale
+      // on the others. Mirrors the fan-out pattern used on the Scheduler page.
+      const results = await Promise.allSettled(
+        SCHEDULER_BACKENDS.map((b) => cookiesApi.create(payload, b.url))
+      );
+      const okResults = results.filter(
+        (r): r is PromiseFulfilledResult<any> => r.status === 'fulfilled'
+      );
+      const failedBackends = results
+        .map((r, i) => ({ result: r, backend: SCHEDULER_BACKENDS[i] }))
+        .filter((x) => x.result.status === 'rejected');
+
+      if (okResults.length === 0) {
+        const firstError: any = (results[0] as PromiseRejectedResult).reason;
+        throw new Error(
+          firstError?.response?.data?.message ||
+            firstError?.message ||
+            'Failed to create cookie file on any backend'
+        );
+      }
+
+      const response = okResults[0].value;
       const convertedNote = response.converted
         ? ` (converted from ${response.formatDetected || 'export'} format)`
         : '';
 
-      toast({
-        title: 'Success',
-        description: `Cookie file created successfully${convertedNote}`,
-      });
+      if (failedBackends.length > 0) {
+        toast({
+          title: 'Partially synced',
+          description: `Added to ${okResults.length}/${SCHEDULER_BACKENDS.length} backends${convertedNote}. Failed: ${failedBackends
+            .map((f) => f.backend.label)
+            .join(', ')}`,
+          variant: 'destructive',
+        });
+      } else {
+        toast({
+          title: 'Success',
+          description: `Cookie file created on all ${SCHEDULER_BACKENDS.length} backends${convertedNote}`,
+        });
+      }
       onSuccess(response);
       onRefresh();
       onClose();
@@ -174,7 +207,7 @@ export function AddCookieDialog({ open, onClose, onSuccess, onRefresh }: AddCook
     } catch (error: any) {
       toast({
         title: 'Error',
-        description: error.response?.data?.message || 'Failed to create cookie file',
+        description: error.response?.data?.message || error.message || 'Failed to create cookie file',
         variant: 'destructive',
       });
     } finally {

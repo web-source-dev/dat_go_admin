@@ -19,7 +19,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { freightdeskApi } from '@/lib/api';
+import { toast } from 'sonner';
+import { freightdeskApi, SCHEDULER_BACKENDS } from '@/lib/api';
 import { COOKIE_LABEL_OPTIONS, CookieLabel, isAssignableCookieLabel } from '@/lib/cookieLabels';
 import { FreightdeskContainerSession, FreightdeskStatus } from '@/lib/types';
 
@@ -81,10 +82,38 @@ export default function FreightdeskSessionsPage() {
     }
   };
 
+  // Fans an action out to every configured backend (primary/backup/fallback) so
+  // a re-import or activation is never left stale on the backends the browser
+  // isn't currently pointed at. Mirrors the pattern used on the Scheduler page.
+  const fanOutToBackends = async (
+    actionLabel: string,
+    call: (baseURL: string) => Promise<any>
+  ) => {
+    const results = await Promise.allSettled(SCHEDULER_BACKENDS.map((b) => call(b.url)));
+    let anyOk = false;
+    results.forEach((result, i) => {
+      const backend = SCHEDULER_BACKENDS[i];
+      if (result.status === 'fulfilled') {
+        anyOk = true;
+        toast.success(`${backend.label}: ${actionLabel} ✓`);
+      } else {
+        const err: any = result.reason;
+        toast.error(`${backend.label}: ${actionLabel} failed`, {
+          description: err?.response?.data?.message || err?.message || 'Request failed',
+        });
+      }
+    });
+    if (!anyOk) {
+      throw new Error(`${actionLabel} failed on all backends`);
+    }
+  };
+
   const handleImport = async (container: string, activate = false) => {
     setWorking(`${container}-import`);
     try {
-      await freightdeskApi.importContainer(container, { activate, channel, forceReimport: true });
+      await fanOutToBackends(`Re-import ${container}`, (baseURL) =>
+        freightdeskApi.importContainer(container, { activate, channel, forceReimport: true }, baseURL)
+      );
       await fetchData();
       setError(null);
     } catch (err: any) {
@@ -97,7 +126,9 @@ export default function FreightdeskSessionsPage() {
   const handleActivate = async (container: string) => {
     setWorking(`${container}-activate`);
     try {
-      await freightdeskApi.importContainer(container, { activate: true, channel, forceReimport: true });
+      await fanOutToBackends(`Activate ${container}`, (baseURL) =>
+        freightdeskApi.importContainer(container, { activate: true, channel, forceReimport: true }, baseURL)
+      );
       await fetchData();
       setError(null);
     } catch (err: any) {
@@ -126,7 +157,9 @@ export default function FreightdeskSessionsPage() {
   const handleImportAll = async (activate = false) => {
     setWorking('import-all');
     try {
-      await freightdeskApi.importAll({ activate, channel, forceReimport: true });
+      await fanOutToBackends('Re-import all containers', (baseURL) =>
+        freightdeskApi.importAll({ activate, channel, forceReimport: true }, baseURL)
+      );
       await fetchData();
       setError(null);
     } catch (err: any) {

@@ -266,13 +266,16 @@ export const cookiesApi = {
     return response.data;
   },
 
-  create: async (cookieData: {
-    fileName?: string;
-    label?: string;
-    sessionId?: string;
-    fileContent: any;
-  }) => {
-    const response = await api.post('/cookie', cookieData);
+  create: async (
+    cookieData: {
+      fileName?: string;
+      label?: string;
+      sessionId?: string;
+      fileContent: any;
+    },
+    baseURL?: string
+  ) => {
+    const response = await api.post('/cookie', cookieData, at(baseURL));
     return response.data;
   },
 
@@ -550,34 +553,38 @@ export const freightdeskApi = {
     container: string,
     options?: {
       activate?: boolean;
-      channel?: 'single' | 'double' | 'multi' | 'swiftSolutions' | 'dathub';
+      channel?: 'single' | 'double' | 'multi' | 'swiftSolutions' | 'test' | 'dathub';
       forceReimport?: boolean;
-    }
+    },
+    baseURL?: string
   ) => {
-    const response = await api.post(`/freightdesk/import/${encodeURIComponent(container)}`, {
-      forceReimport: true,
-      ...options,
-    });
+    const response = await api.post(
+      `/freightdesk/import/${encodeURIComponent(container)}`,
+      { forceReimport: true, ...options },
+      at(baseURL)
+    );
     return response.data;
   },
 
   importAll: async (
     options?: {
       activate?: boolean;
-      channel?: 'single' | 'double' | 'multi' | 'swiftSolutions' | 'dathub';
+      channel?: 'single' | 'double' | 'multi' | 'swiftSolutions' | 'test' | 'dathub';
       forceReimport?: boolean;
-    }
+    },
+    baseURL?: string
   ) => {
-    const response = await api.post('/freightdesk/import-all', {
-      forceReimport: true,
-      ...options,
-    });
+    const response = await api.post(
+      '/freightdesk/import-all',
+      { forceReimport: true, ...options },
+      at(baseURL)
+    );
     return response.data;
   },
 
   activate: async (
     container: string,
-    channel: 'single' | 'double' | 'multi' | 'swiftSolutions' | 'dathub' = 'single'
+    channel: 'single' | 'double' | 'multi' | 'swiftSolutions' | 'test' | 'dathub' = 'single'
   ) => {
     const response = await api.post(`/freightdesk/activate/${encodeURIComponent(container)}`, { channel });
     return response.data;
