@@ -75,7 +75,7 @@ export default function AppUpdatesPage() {
           <CardTitle>Auto-update control</CardTitle>
           <CardDescription>
             Toggle each app on or off. Changes apply immediately and are shared across all backend
-            servers (primary, backup, fallback).
+            servers (main, primary, backup, fallback).
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">

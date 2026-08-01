@@ -294,8 +294,8 @@ export const cookiesApi = {
     return response.data;
   },
 
-  sync: async () => {
-    const response = await api.post('/cookie/sync');
+  sync: async (baseURL?: string) => {
+    const response = await api.post('/cookie/sync', undefined, at(baseURL));
     return response.data;
   },
 
@@ -384,11 +384,10 @@ export const messagesApi = {
   },
 };
 
-// Backend deployments the scheduler can target. It's the same service behind
-// three domains (primary -> backup -> legacy fallback), and each deployment runs
-// its own cron/scheduler. The admin can trigger a job on a specific backend or
-// fan it out to all of them. Override the URLs per environment via NEXT_PUBLIC_* .
-export type SchedulerBackendKey = 'primary' | 'backup' | 'fallback';
+// DAT GO runs on multiple backend deployments (main -> primary -> backup -> fallback).
+// Admin fans scheduler triggers, cookie uploads, FreightDesk imports, etc. out to all of them.
+// Override URLs per environment via NEXT_PUBLIC_* .
+export type SchedulerBackendKey = 'main' | 'primary' | 'backup' | 'fallback';
 
 export interface SchedulerBackend {
   key: SchedulerBackendKey;
@@ -397,6 +396,11 @@ export interface SchedulerBackend {
 }
 
 export const SCHEDULER_BACKENDS: SchedulerBackend[] = [
+  {
+    key: 'main',
+    label: 'Main',
+    url: process.env.NEXT_PUBLIC_API_MAIN_URL || 'https://dat-go-b-kn6b.onrender.com',
+  },
   {
     key: 'primary',
     label: 'Primary',

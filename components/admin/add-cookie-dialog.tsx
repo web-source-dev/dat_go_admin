@@ -159,7 +159,7 @@ export function AddCookieDialog({ open, onClose, onSuccess, onRefresh }: AddCook
         fileContent: parsedContent,
       };
 
-      // Every backend (primary/backup/fallback) runs its own separate DB, so a
+      // Every backend (main/primary/backup/fallback) runs its own separate DB, so a
       // manual upload has to be pushed to each one individually or it's stale
       // on the others. Mirrors the fan-out pattern used on the Scheduler page.
       const results = await Promise.allSettled(

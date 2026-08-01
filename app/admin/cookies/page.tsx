@@ -23,7 +23,8 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Suspense } from 'react';
-import { cookiesApi } from '@/lib/api';
+import { toast } from 'sonner';
+import { cookiesApi, SCHEDULER_BACKENDS } from '@/lib/api';
 import { DataPagination } from '@/components/admin/data-pagination';
 import { useDebounce } from '@/hooks/use-debounce';
 import { AddCookieDialog } from '@/components/admin/add-cookie-dialog';
@@ -243,9 +244,33 @@ export default function CookiesPage() {
   const handleSyncCookies = async () => {
     setSyncing(true);
     try {
-      const result = await cookiesApi.sync();
+      // Each backend (main/primary/backup/fallback) matches its own disk files
+      // against its own DB, so "Sync Files" has to run on every backend or
+      // the others drift out of sync with what's on disk there.
+      const results = await Promise.allSettled(
+        SCHEDULER_BACKENDS.map((b) => cookiesApi.sync(b.url))
+      );
+      let anyOk = false;
+      results.forEach((result, i) => {
+        const backend = SCHEDULER_BACKENDS[i];
+        if (result.status === 'fulfilled') {
+          anyOk = true;
+          const data = result.value;
+          toast.success(`${backend.label}: sync ✓`, {
+            description: `${data.created} created, ${data.updated} updated, ${data.deleted} deleted`,
+          });
+        } else {
+          const err: any = result.reason;
+          toast.error(`${backend.label}: sync failed`, {
+            description: err?.response?.data?.message || err?.message || 'Request failed',
+          });
+        }
+      });
+      if (!anyOk) {
+        throw new Error('Sync failed on all backends');
+      }
       await fetchCookies();
-      alert(`Sync completed: ${result.created} created, ${result.updated} updated, ${result.deleted} deleted`);
+      setError(null);
     } catch (err: any) {
       setError(err.response?.data?.message || err.message || 'Failed to sync cookies');
     } finally {

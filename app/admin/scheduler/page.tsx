@@ -133,7 +133,7 @@ export default function SchedulerPage() {
   const [status, setStatus] = useState<SchedulerStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
-  const [target, setTarget] = useState<TargetKey>('primary');
+  const [target, setTarget] = useState<TargetKey>('main');
   const [syncOptions, setSyncOptions] = useState<SchedulerSyncOptions | null>(null);
   const [syncOptionsLoading, setSyncOptionsLoading] = useState(false);
   const [pendingAction, setPendingAction] = useState<{ action: string; name: string } | null>(null);
