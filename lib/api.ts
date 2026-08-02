@@ -497,6 +497,53 @@ export const updatesApi = {
   },
 };
 
+// Managed Chromium extensions delivered to Horizon via session.loadExtension()
+export interface ManagedExtension {
+  _id: string;
+  name: string;
+  slug: string;
+  version: string;
+  description?: string;
+  fileName: string;
+  originalFileName?: string;
+  fileSize?: number;
+  enabled: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export const extensionsApi = {
+  list: async (): Promise<{ success: boolean; data: ManagedExtension[] }> => {
+    const response = await api.get('/extension');
+    return response.data;
+  },
+
+  upload: async (file: File, meta?: { name?: string; slug?: string; version?: string; description?: string; enabled?: boolean }) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    if (meta?.name) formData.append('name', meta.name);
+    if (meta?.slug) formData.append('slug', meta.slug);
+    if (meta?.version) formData.append('version', meta.version);
+    if (meta?.description) formData.append('description', meta.description);
+    if (meta?.enabled !== undefined) formData.append('enabled', String(meta.enabled));
+
+    const response = await api.post('/extension/upload', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return response.data as { success: boolean; message?: string; data: ManagedExtension };
+  },
+
+  update: async (id: string, data: Partial<Pick<ManagedExtension, 'name' | 'slug' | 'version' | 'description' | 'enabled'>>) => {
+    const response = await api.put(`/extension/${id}`, data);
+    return response.data as { success: boolean; data: ManagedExtension };
+  },
+
+  delete: async (id: string) => {
+    const response = await api.delete(`/extension/${id}`);
+    return response.data;
+  },
+};
+
 // Salesperson Commission API
 export const salespersonCommissionApi = {
   getAll: async (params?: { page?: number; limit?: number; salespersonId?: string; month?: number; year?: number }) => {
