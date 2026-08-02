@@ -384,10 +384,10 @@ export const messagesApi = {
   },
 };
 
-// DAT GO runs on multiple backend deployments (main -> primary -> backup -> fallback).
+// DAT GO runs on multiple backend deployments (main -> primary -> backup).
 // Admin fans scheduler triggers, cookie uploads, FreightDesk imports, etc. out to all of them.
 // Override URLs per environment via NEXT_PUBLIC_* .
-export type SchedulerBackendKey = 'main' | 'primary' | 'backup' | 'fallback';
+export type SchedulerBackendKey = 'main' | 'primary' | 'backup';
 
 export interface SchedulerBackend {
   key: SchedulerBackendKey;
@@ -410,11 +410,6 @@ export const SCHEDULER_BACKENDS: SchedulerBackend[] = [
     key: 'backup',
     label: 'Backup',
     url: process.env.NEXT_PUBLIC_API_BACKUP_URL || 'https://datbackup.apexskillzone.com',
-  },
-  {
-    key: 'fallback',
-    label: 'Fallback',
-    url: process.env.NEXT_PUBLIC_API_FALLBACK_URL || 'https://api.kmldigital.xyz',
   },
 ];
 

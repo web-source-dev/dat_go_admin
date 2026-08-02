@@ -82,7 +82,7 @@ export default function FreightdeskSessionsPage() {
     }
   };
 
-  // Fans an action out to every configured backend (main/primary/backup/fallback) so
+  // Fans an action out to every configured backend (main/primary/backup) so
   // a re-import or activation is never left stale on the backends the browser
   // isn't currently pointed at. Mirrors the pattern used on the Scheduler page.
   const fanOutToBackends = async (

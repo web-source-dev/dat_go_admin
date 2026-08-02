@@ -244,7 +244,7 @@ export default function CookiesPage() {
   const handleSyncCookies = async () => {
     setSyncing(true);
     try {
-      // Each backend (main/primary/backup/fallback) matches its own disk files
+      // Each backend (main/primary/backup) matches its own disk files
       // against its own DB, so "Sync Files" has to run on every backend or
       // the others drift out of sync with what's on disk there.
       const results = await Promise.allSettled(
