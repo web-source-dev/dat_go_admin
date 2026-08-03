@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { schedulerApi, SCHEDULER_BACKENDS, type SchedulerBackendKey } from '@/lib/api';
+import { schedulerApi, SCHEDULER_BACKENDS, getUniqueSchedulerBackends, type SchedulerBackendKey } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -138,10 +138,12 @@ export default function SchedulerPage() {
   const [syncOptionsLoading, setSyncOptionsLoading] = useState(false);
   const [pendingAction, setPendingAction] = useState<{ action: string; name: string } | null>(null);
 
+  const uniqueBackends = getUniqueSchedulerBackends();
+
   const statusBackend =
     target === 'all'
-      ? SCHEDULER_BACKENDS[0]
-      : SCHEDULER_BACKENDS.find((b) => b.key === target) || SCHEDULER_BACKENDS[0];
+      ? uniqueBackends[0]
+      : uniqueBackends.find((b) => b.key === target) || uniqueBackends[0];
 
   const fetchStatus = useCallback(async () => {
     try {
@@ -165,7 +167,7 @@ export default function SchedulerPage() {
     try {
       setSyncOptionsLoading(true);
       const results = await Promise.allSettled(
-        SCHEDULER_BACKENDS.map((b) => schedulerApi.updateSyncOptions(patch, b.url))
+        uniqueBackends.map((b) => schedulerApi.updateSyncOptions(patch, b.url))
       );
       const ok = results.filter((r) => r.status === 'fulfilled');
       const failed = results.filter((r) => r.status === 'rejected');
@@ -187,7 +189,7 @@ export default function SchedulerPage() {
 
       if (failed.length > 0) {
         toast.warning(
-          `Sync settings updated on ${ok.length}/${SCHEDULER_BACKENDS.length} backends`,
+          `Sync settings updated on ${ok.length}/${uniqueBackends.length} backend(s)`,
           { description: 'Some backends failed — switch target and retry if needed.' }
         );
       } else {
@@ -207,7 +209,7 @@ export default function SchedulerPage() {
   }, [fetchStatus]);
 
   const resolveTargets = () =>
-    target === 'all' ? SCHEDULER_BACKENDS : SCHEDULER_BACKENDS.filter((b) => b.key === target);
+    target === 'all' ? uniqueBackends : uniqueBackends.filter((b) => b.key === target);
 
   const handleAction = (action: string, actionName: string) => {
     setPendingAction({ action, name: actionName });
@@ -269,7 +271,7 @@ export default function SchedulerPage() {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          {SCHEDULER_BACKENDS.map((b) => (
+          {uniqueBackends.map((b) => (
             <Button
               key={b.key}
               size="sm"

@@ -2,9 +2,7 @@
 
 import { useSearchParams } from "next/navigation"
 import Loading from './loading';
-import { useEffect } from 'react';
-
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Search, Plus, MoreVertical, AlertCircle, Trash2, RefreshCw, X, FileText, Download, CheckCircle2, Circle } from 'lucide-react';
 import {
   DropdownMenu,
@@ -24,7 +22,7 @@ import {
 } from '@/components/ui/select';
 import { Suspense } from 'react';
 import { toast } from 'sonner';
-import { cookiesApi, SCHEDULER_BACKENDS } from '@/lib/api';
+import { cookiesApi, getUniqueSchedulerBackends } from '@/lib/api';
 import { DataPagination } from '@/components/admin/data-pagination';
 import { useDebounce } from '@/hooks/use-debounce';
 import { AddCookieDialog } from '@/components/admin/add-cookie-dialog';
@@ -47,6 +45,7 @@ export default function CookiesPage() {
   const [selectedCookie, setSelectedCookie] = useState<Cookie | null>(null);
   const [labelFilter, setLabelFilter] = useState<LabelFilter>('all');
   const [syncing, setSyncing] = useState(false);
+  const syncInFlightRef = useRef(false);
   const searchParams = useSearchParams();
   const itemsPerPage = 10;
   const debouncedSearchTerm = useDebounce(searchTerm, 500);
@@ -242,27 +241,38 @@ export default function CookiesPage() {
   };
 
   const handleSyncCookies = async () => {
+    if (syncInFlightRef.current) return;
+    syncInFlightRef.current = true;
     setSyncing(true);
     try {
       // Each backend (main/primary/backup) matches its own disk files
       // against its own DB, so "Sync Files" has to run on every backend or
       // the others drift out of sync with what's on disk there.
+      const backends = getUniqueSchedulerBackends();
       const results = await Promise.allSettled(
-        SCHEDULER_BACKENDS.map((b) => cookiesApi.sync(b.url))
+        backends.map((b) => cookiesApi.sync(b.url))
       );
       let anyOk = false;
       results.forEach((result, i) => {
-        const backend = SCHEDULER_BACKENDS[i];
+        const backend = backends[i];
         if (result.status === 'fulfilled') {
           anyOk = true;
           const data = result.value;
+          const deduped = data.dedupedManual?.removedRecords;
+          const dedupedNote =
+            typeof deduped === 'number' && deduped > 0
+              ? `, ${deduped} duplicate manual removed`
+              : '';
           toast.success(`${backend.label}: sync ✓`, {
-            description: `${data.created} created, ${data.updated} updated, ${data.deleted} deleted`,
+            description: `${data.created} created, ${data.updated} updated, ${data.deleted} deleted${dedupedNote}`,
           });
         } else {
           const err: any = result.reason;
+          const isBusy = err?.response?.status === 409;
           toast.error(`${backend.label}: sync failed`, {
-            description: err?.response?.data?.message || err?.message || 'Request failed',
+            description: isBusy
+              ? 'Sync already running on this backend — wait and try again'
+              : err?.response?.data?.message || err?.message || 'Request failed',
           });
         }
       });
@@ -274,6 +284,7 @@ export default function CookiesPage() {
     } catch (err: any) {
       setError(err.response?.data?.message || err.message || 'Failed to sync cookies');
     } finally {
+      syncInFlightRef.current = false;
       setSyncing(false);
     }
   };

@@ -19,7 +19,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { cookiesApi, sessionsApi, SCHEDULER_BACKENDS } from '@/lib/api';
+import { cookiesApi, sessionsApi, getUniqueSchedulerBackends } from '@/lib/api';
 import { useToast } from '@/hooks/use-toast';
 import { Cookie, DATSession } from '@/lib/types';
 import { AssignableCookieLabel, COOKIE_LABEL_OPTIONS } from '@/lib/cookieLabels';
@@ -162,14 +162,15 @@ export function AddCookieDialog({ open, onClose, onSuccess, onRefresh }: AddCook
       // Every backend (main/primary/backup) runs its own separate DB, so a
       // manual upload has to be pushed to each one individually or it's stale
       // on the others. Mirrors the fan-out pattern used on the Scheduler page.
+      const backends = getUniqueSchedulerBackends();
       const results = await Promise.allSettled(
-        SCHEDULER_BACKENDS.map((b) => cookiesApi.create(payload, b.url))
+        backends.map((b) => cookiesApi.create(payload, b.url))
       );
       const okResults = results.filter(
         (r): r is PromiseFulfilledResult<any> => r.status === 'fulfilled'
       );
       const failedBackends = results
-        .map((r, i) => ({ result: r, backend: SCHEDULER_BACKENDS[i] }))
+        .map((r, i) => ({ result: r, backend: backends[i] }))
         .filter((x) => x.result.status === 'rejected');
 
       if (okResults.length === 0) {
@@ -189,7 +190,7 @@ export function AddCookieDialog({ open, onClose, onSuccess, onRefresh }: AddCook
       if (failedBackends.length > 0) {
         toast({
           title: 'Partially synced',
-          description: `Added to ${okResults.length}/${SCHEDULER_BACKENDS.length} backends${convertedNote}. Failed: ${failedBackends
+          description: `Added to ${okResults.length}/${backends.length} backend(s)${convertedNote}. Failed: ${failedBackends
             .map((f) => f.backend.label)
             .join(', ')}`,
           variant: 'destructive',
@@ -197,10 +198,9 @@ export function AddCookieDialog({ open, onClose, onSuccess, onRefresh }: AddCook
       } else {
         toast({
           title: 'Success',
-          description: `Cookie file created on all ${SCHEDULER_BACKENDS.length} backends${convertedNote}`,
+          description: `Cookie file created on ${backends.length} backend(s)${convertedNote}`,
         });
       }
-      onSuccess(response);
       onRefresh();
       onClose();
       resetForm();

@@ -20,7 +20,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { toast } from 'sonner';
-import { freightdeskApi, SCHEDULER_BACKENDS } from '@/lib/api';
+import { freightdeskApi, getUniqueSchedulerBackends } from '@/lib/api';
 import { COOKIE_LABEL_OPTIONS, CookieLabel, isAssignableCookieLabel } from '@/lib/cookieLabels';
 import { FreightdeskContainerSession, FreightdeskStatus } from '@/lib/types';
 
@@ -89,10 +89,11 @@ export default function FreightdeskSessionsPage() {
     actionLabel: string,
     call: (baseURL: string) => Promise<any>
   ) => {
-    const results = await Promise.allSettled(SCHEDULER_BACKENDS.map((b) => call(b.url)));
+    const backends = getUniqueSchedulerBackends();
+    const results = await Promise.allSettled(backends.map((b) => call(b.url)));
     let anyOk = false;
     results.forEach((result, i) => {
-      const backend = SCHEDULER_BACKENDS[i];
+      const backend = backends[i];
       if (result.status === 'fulfilled') {
         anyOk = true;
         toast.success(`${backend.label}: ${actionLabel} ✓`);

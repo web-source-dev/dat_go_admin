@@ -413,6 +413,23 @@ export const SCHEDULER_BACKENDS: SchedulerBackend[] = [
   },
 ];
 
+function normalizeBackendUrl(url: string): string {
+  return (url || '').trim().replace(/\/+$/, '').toLowerCase();
+}
+
+/** Fan-out targets — duplicate URLs in env (e.g. all pointing at backup) run only once. */
+export function getUniqueSchedulerBackends(): SchedulerBackend[] {
+  const seen = new Set<string>();
+  const unique: SchedulerBackend[] = [];
+  for (const backend of SCHEDULER_BACKENDS) {
+    const key = normalizeBackendUrl(backend.url);
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    unique.push(backend);
+  }
+  return unique;
+}
+
 // Per-request config that points a call at a specific backend. When baseURL is
 // omitted the default `api` baseURL (NEXT_PUBLIC_API_BASE_URL) is used.
 const at = (baseURL?: string) => (baseURL ? { baseURL } : undefined);
