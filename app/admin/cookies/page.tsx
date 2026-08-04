@@ -45,7 +45,9 @@ export default function CookiesPage() {
   const [selectedCookie, setSelectedCookie] = useState<Cookie | null>(null);
   const [labelFilter, setLabelFilter] = useState<LabelFilter>('all');
   const [syncing, setSyncing] = useState(false);
+  const [deletingAll, setDeletingAll] = useState(false);
   const syncInFlightRef = useRef(false);
+  const deleteAllInFlightRef = useRef(false);
   const searchParams = useSearchParams();
   const itemsPerPage = 10;
   const debouncedSearchTerm = useDebounce(searchTerm, 500);
@@ -240,6 +242,55 @@ export default function CookiesPage() {
     }
   };
 
+  const handleDeleteAllCookies = async () => {
+    if (deleteAllInFlightRef.current) return;
+    if (
+      !confirm(
+        'Delete ALL cookie files on every backend?\n\nThis removes every cookie record and every file in the cookies folders. This cannot be undone.'
+      )
+    ) {
+      return;
+    }
+
+    deleteAllInFlightRef.current = true;
+    setDeletingAll(true);
+    try {
+      const backends = getUniqueSchedulerBackends();
+      const results = await Promise.allSettled(
+        backends.map((b) => cookiesApi.deleteAll(b.url))
+      );
+      let anyOk = false;
+      results.forEach((result, i) => {
+        const backend = backends[i];
+        if (result.status === 'fulfilled') {
+          anyOk = true;
+          const data = result.value;
+          toast.success(`${backend.label}: deleted all cookies`, {
+            description: `${data.deletedRecords ?? 0} records, ${data.deletedFiles ?? 0} files removed`,
+          });
+        } else {
+          const err: any = result.reason;
+          toast.error(`${backend.label}: delete all failed`, {
+            description: err?.response?.data?.message || err?.message || 'Request failed',
+          });
+        }
+      });
+      if (!anyOk) {
+        throw new Error('Delete all failed on all backends');
+      }
+      setCookies([]);
+      setTotalCookies(0);
+      setTotalPages(1);
+      setCurrentPage(1);
+      setError(null);
+    } catch (err: any) {
+      setError(err.response?.data?.message || err.message || 'Failed to delete all cookies');
+    } finally {
+      deleteAllInFlightRef.current = false;
+      setDeletingAll(false);
+    }
+  };
+
   const handleSyncCookies = async () => {
     if (syncInFlightRef.current) return;
     syncInFlightRef.current = true;
@@ -339,14 +390,23 @@ export default function CookiesPage() {
               <Button
                 variant="outline"
                 onClick={handleSyncCookies}
-                disabled={syncing}
+                disabled={syncing || deletingAll}
               >
                 <RefreshCw size={18} className={`mr-2 ${syncing ? 'animate-spin' : ''}`} />
                 {syncing ? 'Syncing...' : 'Sync Files'}
               </Button>
               <Button
+                variant="destructive"
+                onClick={handleDeleteAllCookies}
+                disabled={deletingAll || syncing}
+              >
+                <Trash2 size={18} className="mr-2" />
+                {deletingAll ? 'Deleting...' : 'Delete All'}
+              </Button>
+              <Button
                 className="bg-primary hover:bg-primary/90 text-primary-foreground"
                 onClick={handleAddCookie}
+                disabled={deletingAll}
               >
                 <Plus size={18} className="mr-2" />
                 Add Cookie

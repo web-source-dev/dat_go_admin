@@ -294,6 +294,11 @@ export const cookiesApi = {
     return response.data;
   },
 
+  deleteAll: async (baseURL?: string) => {
+    const response = await api.delete('/cookie/all', at(baseURL));
+    return response.data;
+  },
+
   sync: async (baseURL?: string) => {
     const response = await api.post('/cookie/sync', undefined, at(baseURL));
     return response.data;
