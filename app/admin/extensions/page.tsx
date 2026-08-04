@@ -238,6 +238,10 @@ export default function ExtensionsPage() {
         <p className="font-medium text-foreground">Package requirements</p>
         <p>ZIP must contain a Chromium extension with <code className="bg-muted px-1 rounded">manifest.json</code> (MV2 or MV3).</p>
         <p>Chrome Web Store IDs alone will not install — you need the extension files.</p>
+        <p>
+          Horizon shows each enabled extension as a toolbar icon (like Chrome). Click opens
+          the extension popup; right-click opens options when available.
+        </p>
         <p>Enabled packages are fetched by Horizon after login and loaded into each DAT session partition.</p>
       </div>
 

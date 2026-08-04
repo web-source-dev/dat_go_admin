@@ -172,6 +172,47 @@ export const extensionProxyApi = {
   },
 };
 
+/** Horizon desktop — admin-pushed proxy into Foxy Proxy extension */
+export const horizonFoxyProxyApi = {
+  getConfig: async () => {
+    const response = await api.get('/proxy/foxy/admin');
+    return response.data as {
+      enabled: boolean;
+      title: string;
+      type: 'http' | 'https' | 'socks4' | 'socks5';
+      host: string;
+      port: number;
+      username: string;
+      password: string;
+      updatedAt?: string;
+      message?: string;
+    };
+  },
+
+  updateConfig: async (payload: {
+    enabled?: boolean;
+    title?: string;
+    type?: 'http' | 'https' | 'socks4' | 'socks5';
+    host?: string;
+    port?: number | string;
+    username?: string;
+    password?: string;
+  }) => {
+    const response = await api.put('/proxy/foxy/admin', payload);
+    return response.data as {
+      enabled: boolean;
+      title: string;
+      type: 'http' | 'https' | 'socks4' | 'socks5';
+      host: string;
+      port: number;
+      username: string;
+      password: string;
+      updatedAt?: string;
+      message?: string;
+    };
+  },
+};
+
 // Payments API
 export const paymentsApi = {
   getAll: async (params?: { page?: number; limit?: number; userId?: string; status?: string; month?: number; year?: number }) => {
