@@ -255,34 +255,47 @@ export default function CookiesPage() {
     deleteAllInFlightRef.current = true;
     setDeletingAll(true);
     try {
+      // Run sequentially so a slow/failing backup still gets its own wipe
+      // after main/primary finish (parallel shared-DB races + proxy timeouts
+      // were leaving backup disk files behind).
       const backends = getUniqueSchedulerBackends();
-      const results = await Promise.allSettled(
-        backends.map((b) => cookiesApi.deleteAll(b.url))
-      );
       let anyOk = false;
-      results.forEach((result, i) => {
-        const backend = backends[i];
-        if (result.status === 'fulfilled') {
+      const failures: string[] = [];
+
+      for (const backend of backends) {
+        try {
+          const data = await cookiesApi.deleteAll(backend.url);
           anyOk = true;
-          const data = result.value;
           toast.success(`${backend.label}: deleted all cookies`, {
             description: `${data.deletedRecords ?? 0} records, ${data.deletedFiles ?? 0} files removed`,
           });
-        } else {
-          const err: any = result.reason;
+        } catch (err: any) {
+          const status = err?.response?.status;
+          const msg =
+            err?.response?.data?.message ||
+            err?.message ||
+            'Request failed';
+          const detail = status ? `${msg} (HTTP ${status})` : msg;
+          failures.push(`${backend.label}: ${detail}`);
           toast.error(`${backend.label}: delete all failed`, {
-            description: err?.response?.data?.message || err?.message || 'Request failed',
+            description: detail,
           });
         }
-      });
-      if (!anyOk) {
-        throw new Error('Delete all failed on all backends');
       }
+
+      if (!anyOk) {
+        throw new Error(failures.join(' · ') || 'Delete all failed on all backends');
+      }
+
       setCookies([]);
       setTotalCookies(0);
       setTotalPages(1);
       setCurrentPage(1);
-      setError(null);
+      if (failures.length) {
+        setError(`Partial success. Still failing: ${failures.join(' · ')}`);
+      } else {
+        setError(null);
+      }
     } catch (err: any) {
       setError(err.response?.data?.message || err.message || 'Failed to delete all cookies');
     } finally {

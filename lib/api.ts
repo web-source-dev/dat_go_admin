@@ -295,7 +295,12 @@ export const cookiesApi = {
   },
 
   deleteAll: async (baseURL?: string) => {
-    const response = await api.delete('/cookie/all', at(baseURL));
+    // POST matches /cookie/sync fan-out — avoids DELETE /cookie/:id collisions
+    // on backends that haven't picked up the DELETE /all route yet.
+    const response = await api.post('/cookie/delete-all', undefined, {
+      ...at(baseURL),
+      timeout: 180_000,
+    });
     return response.data;
   },
 
