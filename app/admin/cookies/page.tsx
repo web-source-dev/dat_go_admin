@@ -266,7 +266,13 @@ export default function CookiesPage() {
         try {
           const data = await cookiesApi.deleteAll(backend.url);
           anyOk = true;
-          toast.success(`${backend.label}: deleted all cookies`, {
+          const via =
+            data.method === 'legacy-per-id'
+              ? ' (legacy fallback)'
+              : data.method === 'delete-all-alias'
+                ? ' (alias)'
+                : '';
+          toast.success(`${backend.label}: deleted all cookies${via}`, {
             description: `${data.deletedRecords ?? 0} records, ${data.deletedFiles ?? 0} files removed`,
           });
         } catch (err: any) {

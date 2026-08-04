@@ -250,14 +250,17 @@ export const paymentsApi = {
 
 // Cookies API
 export const cookiesApi = {
-  getAll: async (params?: { page?: number; limit?: number; search?: string; label?: string }) => {
+  getAll: async (
+    params?: { page?: number; limit?: number; search?: string; label?: string },
+    baseURL?: string
+  ) => {
     const queryParams = new URLSearchParams();
     if (params?.page) queryParams.append('page', params.page.toString());
     if (params?.limit) queryParams.append('limit', params.limit.toString());
     if (params?.search) queryParams.append('search', params.search.toString());
     if (params?.label) queryParams.append('label', params.label.toString());
 
-    const response = await api.get(`/cookie?${queryParams.toString()}`);
+    const response = await api.get(`/cookie?${queryParams.toString()}`, at(baseURL));
     return response.data;
   },
 
@@ -289,19 +292,74 @@ export const cookiesApi = {
     return response.data;
   },
 
-  delete: async (id: string) => {
-    const response = await api.delete(`/cookie/${id}`);
+  delete: async (id: string, baseURL?: string) => {
+    const response = await api.delete(`/cookie/${id}`, {
+      ...at(baseURL),
+      timeout: 60_000,
+    });
     return response.data;
   },
 
+  /**
+   * Wipe every cookie on a backend.
+   * 1) POST /cookie/delete-all (new)
+   * 2) DELETE /cookie/all (alias)
+   * 3) Legacy: sync disk→DB on that host, then DELETE each /cookie/:id
+   *    (needed when Backup hasn't been redeployed yet but still has orphan files)
+   */
   deleteAll: async (baseURL?: string) => {
-    // POST matches /cookie/sync fan-out — avoids DELETE /cookie/:id collisions
-    // on backends that haven't picked up the DELETE /all route yet.
-    const response = await api.post('/cookie/delete-all', undefined, {
-      ...at(baseURL),
-      timeout: 180_000,
-    });
-    return response.data;
+    const reqTimeout = { ...at(baseURL), timeout: 180_000 };
+
+    try {
+      const response = await api.post('/cookie/delete-all', undefined, reqTimeout);
+      return { ...response.data, method: 'delete-all' as const };
+    } catch (err: any) {
+      if (err?.response?.status !== 404) throw err;
+    }
+
+    try {
+      const response = await api.delete('/cookie/all', reqTimeout);
+      return { ...response.data, method: 'delete-all-alias' as const };
+    } catch (err: any) {
+      if (err?.response?.status !== 404 && err?.response?.status !== 400) throw err;
+    }
+
+    // Legacy path for backends that only have per-id delete.
+    // Sync first so orphan disk files (after another host wiped shared Mongo)
+    // are re-registered, then remove each record+file on THIS host.
+    await api.post('/cookie/sync', undefined, reqTimeout);
+
+    let deletedRecords = 0;
+    let deletedFiles = 0;
+    let guard = 0;
+
+    while (guard < 500) {
+      guard += 1;
+      const page = await api.get('/cookie?page=1&limit=100', reqTimeout);
+      const list: Array<{ _id: string }> = page.data?.cookies || [];
+      if (!list.length) break;
+
+      for (const cookie of list) {
+        try {
+          const result = await api.delete(`/cookie/${cookie._id}`, {
+            ...at(baseURL),
+            timeout: 60_000,
+          });
+          deletedRecords += 1;
+          if (result.data?.deletedFile) deletedFiles += 1;
+        } catch (delErr: any) {
+          // Skip already-gone ids (shared DB race); keep wiping the rest
+          if (delErr?.response?.status !== 404) throw delErr;
+        }
+      }
+    }
+
+    return {
+      message: 'All cookie files deleted via legacy per-id fallback',
+      deletedRecords,
+      deletedFiles,
+      method: 'legacy-per-id' as const,
+    };
   },
 
   sync: async (baseURL?: string) => {
