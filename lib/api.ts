@@ -494,7 +494,8 @@ export const messagesApi = {
 };
 
 // DAT GO runs on multiple backend deployments (main -> primary -> backup).
-// Admin fans scheduler triggers, cookie uploads, FreightDesk imports, etc. out to all of them.
+// Scheduler/file-download triggers still fan out (per-host disk).
+// Cookie + FreightDesk writes go to shared Mongo — Primary alone is enough.
 // Override URLs per environment via NEXT_PUBLIC_* .
 export type SchedulerBackendKey = 'main' | 'primary' | 'backup';
 
@@ -537,6 +538,22 @@ export function getUniqueSchedulerBackends(): SchedulerBackend[] {
     unique.push(backend);
   }
   return unique;
+}
+
+/**
+ * Single backend for shared-DB cookie / FreightDesk operations.
+ * Prefer Primary; fall back to API_BASE_URL / first unique scheduler URL.
+ */
+export function getSharedDbBackend(): SchedulerBackend {
+  const primary = SCHEDULER_BACKENDS.find((b) => b.key === 'primary');
+  if (primary?.url) return primary;
+
+  const base = (process.env.NEXT_PUBLIC_API_BASE_URL || '').trim();
+  if (base) {
+    return { key: 'primary', label: 'Primary', url: base.replace(/\/+$/, '') };
+  }
+
+  return getUniqueSchedulerBackends()[0] || SCHEDULER_BACKENDS[0];
 }
 
 // Per-request config that points a call at a specific backend. When baseURL is
@@ -727,12 +744,13 @@ export const freightdeskApi = {
       activate?: boolean;
       channel?: 'single' | 'double' | 'multi' | 'swiftSolutions' | 'test' | 'dathub';
       forceReimport?: boolean;
+      writeDisk?: boolean;
     },
     baseURL?: string
   ) => {
     const response = await api.post(
       `/freightdesk/import/${encodeURIComponent(container)}`,
-      { forceReimport: true, ...options },
+      { forceReimport: true, writeDisk: false, ...options },
       at(baseURL)
     );
     return response.data;
@@ -743,12 +761,13 @@ export const freightdeskApi = {
       activate?: boolean;
       channel?: 'single' | 'double' | 'multi' | 'swiftSolutions' | 'test' | 'dathub';
       forceReimport?: boolean;
+      writeDisk?: boolean;
     },
     baseURL?: string
   ) => {
     const response = await api.post(
       '/freightdesk/import-all',
-      { forceReimport: true, ...options },
+      { forceReimport: true, writeDisk: false, ...options },
       at(baseURL)
     );
     return response.data;

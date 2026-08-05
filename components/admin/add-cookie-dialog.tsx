@@ -19,7 +19,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { cookiesApi, sessionsApi, getUniqueSchedulerBackends } from '@/lib/api';
+import { cookiesApi, sessionsApi, getSharedDbBackend } from '@/lib/api';
 import { useToast } from '@/hooks/use-toast';
 import { Cookie, DATSession } from '@/lib/types';
 import { AssignableCookieLabel, COOKIE_LABEL_OPTIONS } from '@/lib/cookieLabels';
@@ -159,48 +159,17 @@ export function AddCookieDialog({ open, onClose, onSuccess, onRefresh }: AddCook
         fileContent: parsedContent,
       };
 
-      // Every backend (main/primary/backup) runs its own separate DB, so a
-      // manual upload has to be pushed to each one individually or it's stale
-      // on the others. Mirrors the fan-out pattern used on the Scheduler page.
-      const backends = getUniqueSchedulerBackends();
-      const results = await Promise.allSettled(
-        backends.map((b) => cookiesApi.create(payload, b.url))
-      );
-      const okResults = results.filter(
-        (r): r is PromiseFulfilledResult<any> => r.status === 'fulfilled'
-      );
-      const failedBackends = results
-        .map((r, i) => ({ result: r, backend: backends[i] }))
-        .filter((x) => x.result.status === 'rejected');
-
-      if (okResults.length === 0) {
-        const firstError: any = (results[0] as PromiseRejectedResult).reason;
-        throw new Error(
-          firstError?.response?.data?.message ||
-            firstError?.message ||
-            'Failed to create cookie file on any backend'
-        );
-      }
-
-      const response = okResults[0].value;
+      // Shared Mongo — create once on Primary; all backends read the same DB.
+      const backend = getSharedDbBackend();
+      const response = await cookiesApi.create(payload, backend.url);
       const convertedNote = response.converted
         ? ` (converted from ${response.formatDetected || 'export'} format)`
         : '';
 
-      if (failedBackends.length > 0) {
-        toast({
-          title: 'Partially synced',
-          description: `Added to ${okResults.length}/${backends.length} backend(s)${convertedNote}. Failed: ${failedBackends
-            .map((f) => f.backend.label)
-            .join(', ')}`,
-          variant: 'destructive',
-        });
-      } else {
-        toast({
-          title: 'Success',
-          description: `Cookie file created on ${backends.length} backend(s)${convertedNote}`,
-        });
-      }
+      toast({
+        title: 'Success',
+        description: `Cookie saved to database via ${backend.label}${convertedNote}`,
+      });
       onRefresh();
       onClose();
       resetForm();

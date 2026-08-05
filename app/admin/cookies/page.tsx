@@ -22,7 +22,7 @@ import {
 } from '@/components/ui/select';
 import { Suspense } from 'react';
 import { toast } from 'sonner';
-import { cookiesApi, getUniqueSchedulerBackends } from '@/lib/api';
+import { cookiesApi, getSharedDbBackend } from '@/lib/api';
 import { DataPagination } from '@/components/admin/data-pagination';
 import { useDebounce } from '@/hooks/use-debounce';
 import { AddCookieDialog } from '@/components/admin/add-cookie-dialog';
@@ -246,7 +246,7 @@ export default function CookiesPage() {
     if (deleteAllInFlightRef.current) return;
     if (
       !confirm(
-        'Delete ALL cookie files on every backend?\n\nThis removes every cookie record and every file in the cookies folders. This cannot be undone.'
+        'Delete ALL cookies from the shared database?\n\nThis removes every cookie record (served from Primary). This cannot be undone.'
       )
     ) {
       return;
@@ -255,53 +255,24 @@ export default function CookiesPage() {
     deleteAllInFlightRef.current = true;
     setDeletingAll(true);
     try {
-      // Run sequentially so a slow/failing backup still gets its own wipe
-      // after main/primary finish (parallel shared-DB races + proxy timeouts
-      // were leaving backup disk files behind).
-      const backends = getUniqueSchedulerBackends();
-      let anyOk = false;
-      const failures: string[] = [];
-
-      for (const backend of backends) {
-        try {
-          const data = await cookiesApi.deleteAll(backend.url);
-          anyOk = true;
-          const via =
-            data.method === 'legacy-per-id'
-              ? ' (legacy fallback)'
-              : data.method === 'delete-all-alias'
-                ? ' (alias)'
-                : '';
-          toast.success(`${backend.label}: deleted all cookies${via}`, {
-            description: `${data.deletedRecords ?? 0} records, ${data.deletedFiles ?? 0} files removed`,
-          });
-        } catch (err: any) {
-          const status = err?.response?.status;
-          const msg =
-            err?.response?.data?.message ||
-            err?.message ||
-            'Request failed';
-          const detail = status ? `${msg} (HTTP ${status})` : msg;
-          failures.push(`${backend.label}: ${detail}`);
-          toast.error(`${backend.label}: delete all failed`, {
-            description: detail,
-          });
-        }
-      }
-
-      if (!anyOk) {
-        throw new Error(failures.join(' · ') || 'Delete all failed on all backends');
-      }
+      // Shared Mongo — one delete on Primary is enough for all backends.
+      const backend = getSharedDbBackend();
+      const data = await cookiesApi.deleteAll(backend.url);
+      const via =
+        data.method === 'legacy-per-id'
+          ? ' (legacy fallback)'
+          : data.method === 'delete-all-alias'
+            ? ' (alias)'
+            : '';
+      toast.success(`${backend.label}: deleted all cookies${via}`, {
+        description: `${data.deletedRecords ?? 0} records, ${data.deletedFiles ?? 0} files removed`,
+      });
 
       setCookies([]);
       setTotalCookies(0);
       setTotalPages(1);
       setCurrentPage(1);
-      if (failures.length) {
-        setError(`Partial success. Still failing: ${failures.join(' · ')}`);
-      } else {
-        setError(null);
-      }
+      setError(null);
     } catch (err: any) {
       setError(err.response?.data?.message || err.message || 'Failed to delete all cookies');
     } finally {
@@ -315,44 +286,26 @@ export default function CookiesPage() {
     syncInFlightRef.current = true;
     setSyncing(true);
     try {
-      // Each backend (main/primary/backup) matches its own disk files
-      // against its own DB, so "Sync Files" has to run on every backend or
-      // the others drift out of sync with what's on disk there.
-      const backends = getUniqueSchedulerBackends();
-      const results = await Promise.allSettled(
-        backends.map((b) => cookiesApi.sync(b.url))
-      );
-      let anyOk = false;
-      results.forEach((result, i) => {
-        const backend = backends[i];
-        if (result.status === 'fulfilled') {
-          anyOk = true;
-          const data = result.value;
-          const deduped = data.dedupedManual?.removedRecords;
-          const dedupedNote =
-            typeof deduped === 'number' && deduped > 0
-              ? `, ${deduped} duplicate manual removed`
-              : '';
-          toast.success(`${backend.label}: sync ✓`, {
-            description: `${data.created} created, ${data.updated} updated, ${data.deleted} deleted${dedupedNote}`,
-          });
-        } else {
-          const err: any = result.reason;
-          const isBusy = err?.response?.status === 409;
-          toast.error(`${backend.label}: sync failed`, {
-            description: isBusy
-              ? 'Sync already running on this backend — wait and try again'
-              : err?.response?.data?.message || err?.message || 'Request failed',
-          });
-        }
+      // Shared Mongo — sync once on Primary (legacy disk→DB backfill if needed).
+      const backend = getSharedDbBackend();
+      const data = await cookiesApi.sync(backend.url);
+      const deduped = data.dedupedManual?.removedRecords;
+      const dedupedNote =
+        typeof deduped === 'number' && deduped > 0
+          ? `, ${deduped} duplicate manual removed`
+          : '';
+      toast.success(`${backend.label}: sync ✓`, {
+        description: `${data.created} created, ${data.updated} updated, ${data.deleted} deleted${dedupedNote}`,
       });
-      if (!anyOk) {
-        throw new Error('Sync failed on all backends');
-      }
       await fetchCookies();
       setError(null);
     } catch (err: any) {
-      setError(err.response?.data?.message || err.message || 'Failed to sync cookies');
+      const isBusy = err?.response?.status === 409;
+      setError(
+        isBusy
+          ? 'Sync already running — wait and try again'
+          : err.response?.data?.message || err.message || 'Failed to sync cookies'
+      );
     } finally {
       syncInFlightRef.current = false;
       setSyncing(false);
