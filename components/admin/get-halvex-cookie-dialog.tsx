@@ -33,13 +33,13 @@ function downloadJson(fileName: string, data: unknown) {
 }
 
 export function GetHalvexCookieDialog({ open, onClose }: GetHalvexCookieDialogProps) {
-  const [email, setEmail] = useState('');
+  const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
 
   const resetForm = () => {
-    setEmail('');
+    setIdentifier('');
     setPassword('');
   };
 
@@ -51,10 +51,10 @@ export function GetHalvexCookieDialog({ open, onClose }: GetHalvexCookieDialogPr
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email.trim() || !password) {
+    if (!identifier.trim() || !password) {
       toast({
         title: 'Missing credentials',
-        description: 'Enter the Halvex user email and password.',
+        description: 'Enter the Halvex username or email, and password.',
         variant: 'destructive',
       });
       return;
@@ -63,7 +63,7 @@ export function GetHalvexCookieDialog({ open, onClose }: GetHalvexCookieDialogPr
     setLoading(true);
     try {
       const result = await cookiesApi.dumpFromHalvex({
-        email: email.trim(),
+        identifier: identifier.trim(),
         password,
       });
       downloadJson(result.fileName, result.container);
@@ -91,21 +91,21 @@ export function GetHalvexCookieDialog({ open, onClose }: GetHalvexCookieDialogPr
         <DialogHeader>
           <DialogTitle>Get Halvex cookie file</DialogTitle>
           <DialogDescription>
-            Enter the Halvex user email and password. The admin panel will load that user&apos;s
-            DAT session and download an <code>fd-container-*.json</code> cookie file.
+            Enter the Halvex username or email, plus password. The admin panel will load that
+            user&apos;s DAT session and download an <code>fd-container-*.json</code> cookie file.
           </DialogDescription>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="halvexEmail">User email</Label>
+            <Label htmlFor="halvexIdentifier">Username or email</Label>
             <Input
-              id="halvexEmail"
-              type="email"
+              id="halvexIdentifier"
+              type="text"
               autoComplete="off"
-              placeholder="user@example.com"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              placeholder="username or user@example.com"
+              value={identifier}
+              onChange={(e) => setIdentifier(e.target.value)}
               required
             />
           </div>

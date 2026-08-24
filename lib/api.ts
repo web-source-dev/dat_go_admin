@@ -317,7 +317,7 @@ export const cookiesApi = {
     return response.data;
   },
 
-  dumpFromHalvex: async (credentials: { email: string; password: string }) => {
+  dumpFromHalvex: async (credentials: { identifier: string; password: string }) => {
     const response = await api.post('/cookie/from-halvex', credentials, { timeout: 60_000 });
     return response.data as {
       fileName: string;
