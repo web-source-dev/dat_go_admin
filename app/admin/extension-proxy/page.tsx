@@ -63,6 +63,28 @@ const PRODUCT_OPTIONS: Array<{
   { key: 'datHub', label: 'DAT Hub', description: 'dat-hub extension' },
 ];
 
+type PlanEnabledKey = 'single' | 'double' | 'multi' | 'swiftSolutions' | 'test';
+
+const PLAN_OPTIONS: Array<{
+  key: PlanEnabledKey;
+  label: string;
+  description: string;
+}> = [
+  { key: 'single', label: 'Single', description: 'Users on single plan' },
+  { key: 'double', label: 'Double', description: 'Users on double plan' },
+  { key: 'multi', label: 'Multi', description: 'Users on multi plan' },
+  { key: 'swiftSolutions', label: 'Swift', description: 'Users with Swift Solutions label' },
+  { key: 'test', label: 'Test', description: 'Users with test label' },
+];
+
+const createEmptyPlanEnabled = (): Record<PlanEnabledKey, boolean> => ({
+  single: true,
+  double: true,
+  multi: true,
+  swiftSolutions: true,
+  test: true,
+});
+
 const createEmptyProductProxy = (): Record<ExtensionProxyProductKey, ProductProxyForm> => ({
   datGo: {
     enabled: true,
@@ -110,6 +132,8 @@ export default function ExtensionProxyPage() {
   const [customPassword, setCustomPassword] = useState('');
   const [productProxy, setProductProxy] =
     useState<Record<ExtensionProxyProductKey, ProductProxyForm>>(createEmptyProductProxy);
+  const [planEnabled, setPlanEnabled] =
+    useState<Record<PlanEnabledKey, boolean>>(createEmptyPlanEnabled);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -123,6 +147,13 @@ export default function ExtensionProxyPage() {
     setCustomPort(data.custom?.port ? String(data.custom.port) : '');
     setCustomUsername(data.custom?.username || '');
     setCustomPassword(data.custom?.password || '');
+    setPlanEnabled({
+      single: data.planEnabled?.single !== false,
+      double: data.planEnabled?.double !== false,
+      multi: data.planEnabled?.multi !== false,
+      swiftSolutions: data.planEnabled?.swiftSolutions !== false,
+      test: data.planEnabled?.test !== false,
+    });
     const nextProductProxy = createEmptyProductProxy();
     PRODUCT_OPTIONS.forEach((product) => {
       const productConfig = data.productProxy?.[product.key];
@@ -205,6 +236,7 @@ export default function ExtensionProxyPage() {
       source,
       sessionId: source === 'session' ? sessionId || null : null,
       proxyIpId: source === 'proxyPool' ? proxyIpId || null : null,
+      planEnabled,
       productEnabled: Object.fromEntries(
         PRODUCT_OPTIONS.map((product) => [product.key, productProxy[product.key].enabled])
       ) as Record<ExtensionProxyProductKey, boolean>,
@@ -342,8 +374,9 @@ export default function ExtensionProxyPage() {
               Extension Proxy
             </h1>
             <p className="text-sm text-muted-foreground mt-1">
-              Choose which proxy Chrome and Swift extensions receive from{' '}
+              Choose which proxy Chrome extensions and DAT GO / DAT Hub apps receive from{' '}
               <code className="text-xs bg-muted px-1 rounded">GET /proxy/config</code>
+              {' '}(gated by plan and product).
             </p>
           </div>
           <Button variant="outline" size="sm" onClick={loadData} disabled={saving}>
@@ -389,9 +422,40 @@ export default function ExtensionProxyPage() {
 
           <div className="space-y-3 rounded-lg border border-border bg-muted/20 p-4">
             <div>
-              <p className="font-medium text-foreground">Proxy by extension product</p>
+              <p className="font-medium text-foreground">Enable proxy by plan</p>
               <p className="text-sm text-muted-foreground">
-                Assign a separate proxy source for each extension build. Per-user proxy permission still applies.
+                Applies to Chrome extensions <strong>and</strong> DAT GO / DAT Hub desktop apps. Only users on
+                these plans (or Swift / Test labels) receive the managed proxy below. Turn a group off to force
+                direct connection for them.
+              </p>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+              {PLAN_OPTIONS.map((plan) => (
+                <div
+                  key={plan.key}
+                  className="flex items-center justify-between gap-3 rounded-lg border border-border bg-card px-4 py-3"
+                >
+                  <div className="min-w-0">
+                    <p className="font-medium text-foreground text-sm">{plan.label}</p>
+                    <p className="text-xs text-muted-foreground truncate">{plan.description}</p>
+                  </div>
+                  <Switch
+                    checked={planEnabled[plan.key]}
+                    onCheckedChange={(checked) =>
+                      setPlanEnabled((current) => ({ ...current, [plan.key]: checked }))
+                    }
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="space-y-3 rounded-lg border border-border bg-muted/20 p-4">
+            <div>
+              <p className="font-medium text-foreground">Proxy by extension / app product</p>
+              <p className="text-sm text-muted-foreground">
+                Assign a separate proxy source for DAT GO, Swift, and DAT Hub. Desktop apps use the matching
+                product (datGo / datHub). Plan toggles and per-user proxy permission still apply.
               </p>
             </div>
             <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">

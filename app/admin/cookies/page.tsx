@@ -27,6 +27,7 @@ import { DataPagination } from '@/components/admin/data-pagination';
 import { useDebounce } from '@/hooks/use-debounce';
 import { AddCookieDialog } from '@/components/admin/add-cookie-dialog';
 import { EditCookieDialog } from '@/components/admin/edit-cookie-dialog';
+import { GetHalvexCookieDialog } from '@/components/admin/get-halvex-cookie-dialog';
 import { Cookie } from '@/lib/types';
 import { COOKIE_LABEL_OPTIONS, CookieLabel, isAssignableCookieLabel } from '@/lib/cookieLabels';
 
@@ -42,6 +43,7 @@ export default function CookiesPage() {
   const [totalCookies, setTotalCookies] = useState(0);
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [halvexDialogOpen, setHalvexDialogOpen] = useState(false);
   const [selectedCookie, setSelectedCookie] = useState<Cookie | null>(null);
   const [labelFilter, setLabelFilter] = useState<LabelFilter>('all');
   const [syncing, setSyncing] = useState(false);
@@ -359,6 +361,14 @@ export default function CookiesPage() {
               </p>
             </div>
             <div className="flex gap-2">
+              <Button
+                variant="outline"
+                onClick={() => setHalvexDialogOpen(true)}
+                disabled={deletingAll}
+              >
+                <Download size={18} className="mr-2" />
+                Get Halvex cookies
+              </Button>
               <Button
                 variant="outline"
                 onClick={handleSyncCookies}
@@ -762,6 +772,11 @@ export default function CookiesPage() {
           onClose={() => setAddDialogOpen(false)}
           onSuccess={handleCookieAdded}
           onRefresh={handleCookieSuccess}
+        />
+
+        <GetHalvexCookieDialog
+          open={halvexDialogOpen}
+          onClose={() => setHalvexDialogOpen(false)}
         />
 
         <EditCookieDialog

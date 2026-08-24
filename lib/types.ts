@@ -369,6 +369,14 @@ export interface ExtensionProxyAdminConfig {
     swiftSolutions: boolean;
     datHub: boolean;
   };
+  /** Per user plan / Swift audience — when false that group gets enabled: false */
+  planEnabled: {
+    single: boolean;
+    double: boolean;
+    multi: boolean;
+    swiftSolutions: boolean;
+    test: boolean;
+  };
   productProxy: Record<ExtensionProxyProductKey, ExtensionProxyProductConfig>;
   custom: ExtensionProxyCustomConfig;
   env: {

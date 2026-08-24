@@ -134,6 +134,13 @@ export const extensionProxyApi = {
       swiftSolutions?: boolean;
       datHub?: boolean;
     };
+    planEnabled?: {
+      single?: boolean;
+      double?: boolean;
+      multi?: boolean;
+      swiftSolutions?: boolean;
+      test?: boolean;
+    };
     productProxy?: Partial<
       Record<
         import('./types').ExtensionProxyProductKey,
@@ -308,6 +315,16 @@ export const cookiesApi = {
   getById: async (id: string) => {
     const response = await api.get(`/cookie/${id}`);
     return response.data;
+  },
+
+  dumpFromHalvex: async (credentials: { email: string; password: string }) => {
+    const response = await api.post('/cookie/from-halvex', credentials, { timeout: 60_000 });
+    return response.data as {
+      fileName: string;
+      cookieCount: number;
+      user: { id: number; username?: string | null; email?: string | null; fullName?: string | null };
+      container: Record<string, { cookies: unknown[]; lastUpdated: string }>;
+    };
   },
 
   create: async (
