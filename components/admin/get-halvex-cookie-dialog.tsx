@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -20,6 +20,35 @@ interface GetHalvexCookieDialogProps {
   onClose: () => void;
 }
 
+const DEFAULT_IDENTIFIER = 'branrizwan';
+const DEFAULT_PASSWORD = 'ashdat@123';
+const CREDS_STORAGE_KEY = 'dathub-halvex-dump-creds';
+
+function readStoredCreds() {
+  try {
+    const raw = localStorage.getItem(CREDS_STORAGE_KEY);
+    if (!raw) return { identifier: DEFAULT_IDENTIFIER, password: DEFAULT_PASSWORD };
+    const parsed = JSON.parse(raw);
+    return {
+      identifier: String(parsed?.identifier || DEFAULT_IDENTIFIER),
+      password: String(parsed?.password || DEFAULT_PASSWORD),
+    };
+  } catch {
+    return { identifier: DEFAULT_IDENTIFIER, password: DEFAULT_PASSWORD };
+  }
+}
+
+function saveStoredCreds(identifier: string, password: string) {
+  try {
+    localStorage.setItem(
+      CREDS_STORAGE_KEY,
+      JSON.stringify({ identifier, password })
+    );
+  } catch {
+    // ignore quota / private mode
+  }
+}
+
 function downloadJson(fileName: string, data: unknown) {
   const blob = new Blob([JSON.stringify(data, null, 2) + '\n'], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
@@ -33,19 +62,20 @@ function downloadJson(fileName: string, data: unknown) {
 }
 
 export function GetHalvexCookieDialog({ open, onClose }: GetHalvexCookieDialogProps) {
-  const [identifier, setIdentifier] = useState('');
-  const [password, setPassword] = useState('');
+  const [identifier, setIdentifier] = useState(DEFAULT_IDENTIFIER);
+  const [password, setPassword] = useState(DEFAULT_PASSWORD);
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
 
-  const resetForm = () => {
-    setIdentifier('');
-    setPassword('');
-  };
+  useEffect(() => {
+    if (!open) return;
+    const stored = readStoredCreds();
+    setIdentifier(stored.identifier);
+    setPassword(stored.password);
+  }, [open]);
 
   const handleClose = () => {
     if (loading) return;
-    resetForm();
     onClose();
   };
 
@@ -62,16 +92,17 @@ export function GetHalvexCookieDialog({ open, onClose }: GetHalvexCookieDialogPr
 
     setLoading(true);
     try {
+      const nextIdentifier = identifier.trim();
       const result = await cookiesApi.dumpFromHalvex({
-        identifier: identifier.trim(),
+        identifier: nextIdentifier,
         password,
       });
+      saveStoredCreds(nextIdentifier, password);
       downloadJson(result.fileName, result.container);
       toast({
         title: 'Cookie file downloaded',
         description: `${result.fileName} · ${result.cookieCount} cookie(s) for ${result.user?.email || result.user?.username || 'user'}`,
       });
-      resetForm();
       onClose();
     } catch (error: any) {
       toast({
@@ -91,7 +122,7 @@ export function GetHalvexCookieDialog({ open, onClose }: GetHalvexCookieDialogPr
         <DialogHeader>
           <DialogTitle>Get Halvex cookie file</DialogTitle>
           <DialogDescription>
-            Enter the Halvex username or email, plus password. The admin panel will load that
+            Username and password are prefilled and can be changed. The admin panel will load that
             user&apos;s DAT session and download an <code>fd-container-*.json</code> cookie file.
           </DialogDescription>
         </DialogHeader>

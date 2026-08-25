@@ -101,7 +101,7 @@ export default function ExtensionsPage() {
     setExtensions((prev) => prev.map((e) => (e._id === ext._id ? { ...e, enabled } : e)));
     try {
       await extensionsApi.update(ext._id, { enabled });
-      toast.success(`${ext.name}: ${enabled ? 'enabled' : 'disabled'} for Horizon`);
+      toast.success(`${ext.name}: ${enabled ? 'enabled' : 'disabled'} for desktop clients`);
     } catch (error: any) {
       setExtensions((prev) => prev.map((e) => (e._id === ext._id ? { ...e, enabled: !enabled } : e)));
       toast.error(error.response?.data?.message || 'Failed to update');
@@ -111,7 +111,7 @@ export default function ExtensionsPage() {
   };
 
   const handleDelete = async (ext: ManagedExtension) => {
-    if (!confirm(`Delete extension "${ext.name}"? Horizon clients will stop loading it.`)) return;
+    if (!confirm(`Delete extension "${ext.name}"? Horizon and DAT GO clients will stop loading it.`)) return;
     try {
       await extensionsApi.delete(ext._id);
       toast.success('Extension deleted');
@@ -135,11 +135,12 @@ export default function ExtensionsPage() {
         <div>
           <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-2">
             <Puzzle className="h-8 w-8" />
-            Horizon Extensions
+            Horizon / DAT GO Extensions
           </h1>
           <p className="text-gray-600 mt-2 max-w-2xl">
-            Upload Chromium extension ZIP packages. When enabled, every Horizon desktop client
-            downloads and loads them with Electron&apos;s <code className="text-xs bg-muted px-1 rounded">session.loadExtension()</code>.
+            Upload Chromium extension ZIP packages (Signal, Foxy Proxy, or any unpacked
+            extension). When enabled, Horizon and DAT GO desktop clients download and load
+            them with Electron&apos;s <code className="text-xs bg-muted px-1 rounded">session.loadExtension()</code>.
             Re-uploading the same slug replaces the package.
           </p>
         </div>
@@ -242,7 +243,11 @@ export default function ExtensionsPage() {
           Horizon shows each enabled extension as a toolbar icon (like Chrome). Click opens
           the extension popup; right-click opens options when available.
         </p>
-        <p>Enabled packages are fetched by Horizon after login and loaded into each DAT session partition.</p>
+        <p>Enabled packages are fetched by Horizon and DAT GO after login and loaded into each DAT session partition.</p>
+        <p>
+          Google sign-in (Signal / Gmail OAuth) opens in installed Chrome or Edge because
+          Google blocks Electron&apos;s embedded Chromium.
+        </p>
       </div>
 
       <Dialog
