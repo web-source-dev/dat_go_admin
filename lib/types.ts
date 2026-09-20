@@ -315,6 +315,8 @@ export interface ExtensionProxyPoolItem {
   providerName: string;
   isActive: boolean;
   proxyPreview: string;
+  /** Active (non-banned) users on this proxy */
+  activeUserCount?: number;
 }
 
 export type ExtensionProxySource = 'env' | 'session' | 'custom' | 'proxyPool';

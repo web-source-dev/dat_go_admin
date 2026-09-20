@@ -825,7 +825,8 @@ export default function ExtensionProxyPage() {
                 Imported proxy pool
               </h2>
               <p className="text-sm text-muted-foreground mt-1">
-                {availableProxies.length} proxies in database — click Use to apply as the default proxy
+                {availableProxies.length} proxies in database — Users = active (non-banned).
+                Click Use to apply as the default proxy
               </p>
             </div>
             <div className="relative w-full sm:w-64">
@@ -854,6 +855,7 @@ export default function ExtensionProxyPage() {
                     <th className="px-4 py-3 font-medium text-muted-foreground">Host:Port</th>
                     <th className="px-4 py-3 font-medium text-muted-foreground">Username</th>
                     <th className="px-4 py-3 font-medium text-muted-foreground">Provider</th>
+                    <th className="px-4 py-3 font-medium text-muted-foreground">Users</th>
                     <th className="px-4 py-3 font-medium text-muted-foreground">Status</th>
                     <th className="px-4 py-3 font-medium text-muted-foreground text-right">Action</th>
                   </tr>
@@ -862,6 +864,7 @@ export default function ExtensionProxyPage() {
                   {filteredProxies.map((proxy) => {
                     const isActive =
                       config?.source === 'proxyPool' && config.proxyIpId === proxy._id;
+                    const userCount = proxy.activeUserCount ?? 0;
                     return (
                       <tr
                         key={proxy._id}
@@ -877,6 +880,18 @@ export default function ExtensionProxyPage() {
                           {proxy.username || '—'}
                         </td>
                         <td className="px-4 py-3 text-muted-foreground">{proxy.providerName || '—'}</td>
+                        <td className="px-4 py-3">
+                          <span
+                            className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold tabular-nums ${
+                              userCount > 0
+                                ? 'bg-primary/10 text-primary'
+                                : 'bg-muted text-muted-foreground'
+                            }`}
+                            title="Active (non-banned) users on this proxy"
+                          >
+                            {userCount}
+                          </span>
+                        </td>
                         <td className="px-4 py-3">
                           {isActive ? (
                             <span className="inline-flex items-center gap-1 text-xs font-medium text-primary">
