@@ -154,6 +154,8 @@ export interface Cookie {
   isActiveSwiftSolutions?: boolean;
   /** Active for users with label=test */
   isActiveTest?: boolean;
+  /** Active for users with label=horizon */
+  isActiveHorizon?: boolean;
   /** Quick ops flag: known working cookie */
   isWorking?: boolean;
   createdAt: string;
@@ -176,6 +178,7 @@ export interface FreightdeskContainerSession {
   isActiveMulti?: boolean;
   isActiveSwiftSolutions?: boolean;
   isActiveTest?: boolean;
+  isActiveHorizon?: boolean;
   isWorking?: boolean;
   isActive?: boolean;
 }
@@ -378,6 +381,7 @@ export interface ExtensionProxyAdminConfig {
     multi: boolean;
     swiftSolutions: boolean;
     test: boolean;
+    horizon: boolean;
   };
   productProxy: Record<ExtensionProxyProductKey, ExtensionProxyProductConfig>;
   custom: ExtensionProxyCustomConfig;

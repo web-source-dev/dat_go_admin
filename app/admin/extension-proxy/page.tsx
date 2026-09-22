@@ -63,7 +63,7 @@ const PRODUCT_OPTIONS: Array<{
   { key: 'datHub', label: 'DAT Hub', description: 'dat-hub extension' },
 ];
 
-type PlanEnabledKey = 'single' | 'double' | 'multi' | 'swiftSolutions' | 'test';
+type PlanEnabledKey = 'single' | 'double' | 'multi' | 'swiftSolutions' | 'test' | 'horizon';
 
 const PLAN_OPTIONS: Array<{
   key: PlanEnabledKey;
@@ -75,6 +75,7 @@ const PLAN_OPTIONS: Array<{
   { key: 'multi', label: 'Multi', description: 'Users on multi plan' },
   { key: 'swiftSolutions', label: 'Swift', description: 'Users with Swift Solutions label' },
   { key: 'test', label: 'Test', description: 'Users with test label' },
+  { key: 'horizon', label: 'Horizon', description: 'Users with horizon label' },
 ];
 
 const createEmptyPlanEnabled = (): Record<PlanEnabledKey, boolean> => ({
@@ -83,6 +84,7 @@ const createEmptyPlanEnabled = (): Record<PlanEnabledKey, boolean> => ({
   multi: true,
   swiftSolutions: true,
   test: true,
+  horizon: true,
 });
 
 const createEmptyProductProxy = (): Record<ExtensionProxyProductKey, ProductProxyForm> => ({
@@ -153,6 +155,7 @@ export default function ExtensionProxyPage() {
       multi: data.planEnabled?.multi !== false,
       swiftSolutions: data.planEnabled?.swiftSolutions !== false,
       test: data.planEnabled?.test !== false,
+      horizon: data.planEnabled?.horizon !== false,
     });
     const nextProductProxy = createEmptyProductProxy();
     PRODUCT_OPTIONS.forEach((product) => {
@@ -425,11 +428,11 @@ export default function ExtensionProxyPage() {
               <p className="font-medium text-foreground">Enable proxy by plan</p>
               <p className="text-sm text-muted-foreground">
                 Applies to Chrome extensions <strong>and</strong> DAT GO / DAT Hub desktop apps. Only users on
-                these plans (or Swift / Test labels) receive the managed proxy below. Turn a group off to force
-                direct connection for them.
+                these plans (or Swift / Test / Horizon labels) receive the managed proxy below. Turn a group off
+                to force direct connection for them.
               </p>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3">
               {PLAN_OPTIONS.map((plan) => (
                 <div
                   key={plan.key}

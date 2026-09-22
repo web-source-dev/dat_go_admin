@@ -134,7 +134,7 @@ export default function CookiesPage() {
     }
   };
 
-  type CookieChannel = 'single' | 'double' | 'multi' | 'swiftSolutions' | 'test';
+  type CookieChannel = 'single' | 'double' | 'multi' | 'swiftSolutions' | 'test' | 'horizon';
 
   const [togglingKey, setTogglingKey] = useState<string | null>(null);
 
@@ -148,6 +148,8 @@ export default function CookiesPage() {
         return Boolean(cookie.isActiveSwiftSolutions);
       case 'test':
         return Boolean(cookie.isActiveTest);
+      case 'horizon':
+        return Boolean(cookie.isActiveHorizon);
       case 'single':
       default:
         return Boolean(cookie.isActiveSingle);
@@ -508,6 +510,9 @@ export default function CookiesPage() {
                     <th className="px-6 py-3 text-left text-sm font-semibold text-muted-foreground">
                       Test
                     </th>
+                    <th className="px-6 py-3 text-left text-sm font-semibold text-muted-foreground">
+                      Horizon
+                    </th>
                     <th className="px-6 py-3 text-right text-sm font-semibold text-muted-foreground">
                       Actions
                     </th>
@@ -624,6 +629,13 @@ export default function CookiesPage() {
                         )}
                       </td>
                       <td className="px-6 py-4">
+                        {renderChannelToggle(
+                          cookie,
+                          'horizon',
+                          'bg-sky-500/10 text-sky-600 border-sky-500/30'
+                        )}
+                      </td>
+                      <td className="px-6 py-4">
                         <div className="flex justify-end">
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
@@ -715,6 +727,23 @@ export default function CookiesPage() {
                                 >
                                   <Circle size={16} className="mr-2" />
                                   Disable for Test users
+                                </DropdownMenuItem>
+                              )}
+                              {!cookie.isActiveHorizon ? (
+                                <DropdownMenuItem
+                                  onClick={() => handleActivateCookie(cookie, 'horizon')}
+                                  className="cursor-pointer text-foreground hover:bg-muted"
+                                >
+                                  <CheckCircle2 size={16} className="mr-2" />
+                                  Enable for Horizon users
+                                </DropdownMenuItem>
+                              ) : (
+                                <DropdownMenuItem
+                                  onClick={() => handleDeactivateCookie(cookie, 'horizon')}
+                                  className="cursor-pointer text-foreground hover:bg-muted"
+                                >
+                                  <Circle size={16} className="mr-2" />
+                                  Disable for Horizon users
                                 </DropdownMenuItem>
                               )}
                               <DropdownMenuItem

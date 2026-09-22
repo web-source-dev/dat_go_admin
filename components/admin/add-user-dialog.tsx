@@ -367,14 +367,16 @@ export function AddUserDialog({ open, onClose, onSuccess, onRefresh }: AddUserDi
                 <datalist id="available-labels">
                   <option value="test" />
                   <option value="swiftSolutions" />
+                  <option value="horizon" />
                   {availableLabels
-                    .filter((label) => label !== 'test' && label !== 'swiftSolutions')
+                    .filter((label) => label !== 'test' && label !== 'swiftSolutions' && label !== 'horizon')
                     .map((label) => (
                       <option key={label} value={label} />
                     ))}
                 </datalist>
                 <p className="text-xs text-muted-foreground">
-                  Use label <code>test</code> for test-cookie users, or <code>swiftSolutions</code> for Swift.
+                  Use label <code>test</code> for test-cookie users, <code>swiftSolutions</code> for Swift, or{' '}
+                  <code>horizon</code> for Horizon users with their own cookie channel.
                 </p>
               </div>
             </div>
@@ -444,7 +446,7 @@ export function AddUserDialog({ open, onClose, onSuccess, onRefresh }: AddUserDi
                   </SelectContent>
                 </Select>
                 <p className="text-xs text-muted-foreground">
-                  ZIP uses the assigned session profile. Cookie uses the active cookie for this user&apos;s plan/label (single/double/multi, or test/swiftSolutions labels).
+                  ZIP uses the assigned session profile. Cookie uses the active cookie for this user&apos;s plan/label (single/double/multi, or test/swiftSolutions/horizon labels).
                 </p>
               </div>
 

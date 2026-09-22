@@ -140,6 +140,7 @@ export const extensionProxyApi = {
       multi?: boolean;
       swiftSolutions?: boolean;
       test?: boolean;
+      horizon?: boolean;
     };
     productProxy?: Partial<
       Record<
@@ -427,7 +428,7 @@ export const cookiesApi = {
 
   activate: async (
     id: string,
-    channel: 'single' | 'double' | 'multi' | 'swiftSolutions' | 'test' | 'dathub' = 'single'
+    channel: 'single' | 'double' | 'multi' | 'swiftSolutions' | 'test' | 'horizon' | 'dathub' = 'single'
   ) => {
     const response = await api.post(`/cookie/${id}/activate`, { channel });
     return response.data;
@@ -435,7 +436,7 @@ export const cookiesApi = {
 
   deactivate: async (
     id: string,
-    channel: 'single' | 'double' | 'multi' | 'swiftSolutions' | 'test' | 'dathub' = 'single'
+    channel: 'single' | 'double' | 'multi' | 'swiftSolutions' | 'test' | 'horizon' | 'dathub' = 'single'
   ) => {
     const response = await api.post(`/cookie/${id}/deactivate`, { channel });
     return response.data;
@@ -759,7 +760,7 @@ export const freightdeskApi = {
     container: string,
     options?: {
       activate?: boolean;
-      channel?: 'single' | 'double' | 'multi' | 'swiftSolutions' | 'test' | 'dathub';
+      channel?: 'single' | 'double' | 'multi' | 'swiftSolutions' | 'test' | 'horizon' | 'dathub';
       forceReimport?: boolean;
       writeDisk?: boolean;
     },
@@ -776,7 +777,7 @@ export const freightdeskApi = {
   importAll: async (
     options?: {
       activate?: boolean;
-      channel?: 'single' | 'double' | 'multi' | 'swiftSolutions' | 'test' | 'dathub';
+      channel?: 'single' | 'double' | 'multi' | 'swiftSolutions' | 'test' | 'horizon' | 'dathub';
       forceReimport?: boolean;
       writeDisk?: boolean;
     },
@@ -792,7 +793,7 @@ export const freightdeskApi = {
 
   activate: async (
     container: string,
-    channel: 'single' | 'double' | 'multi' | 'swiftSolutions' | 'test' | 'dathub' = 'single'
+    channel: 'single' | 'double' | 'multi' | 'swiftSolutions' | 'test' | 'horizon' | 'dathub' = 'single'
   ) => {
     const response = await api.post(`/freightdesk/activate/${encodeURIComponent(container)}`, { channel });
     return response.data;
