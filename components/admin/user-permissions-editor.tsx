@@ -54,7 +54,7 @@ interface UserPermissions {
   desktop: boolean;
   mobile: boolean;
   extension: boolean;
-  extensionProxy: boolean;
+  extensionProxy?: boolean;
 }
 
 interface User {

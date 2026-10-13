@@ -2,15 +2,18 @@
 
 import React from 'react';
 import { useSearchParams } from "next/navigation"
-import { Suspense, useEffect } from 'react';
+import { Suspense, useCallback, useEffect, useMemo } from 'react';
 import { useState } from 'react';
-import { Search, Plus, MoreVertical, Shield, Ban, Edit, AlertCircle, ChevronDown, ChevronRight, X, Coins, RefreshCw } from 'lucide-react';
+import { Search, Plus, MoreVertical, Shield, Ban, Edit, AlertCircle, ChevronDown, ChevronRight, X, Coins, RefreshCw, Send, Download, Monitor } from 'lucide-react';
+import { toast as sonnerToast } from 'sonner';
 import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/hooks/use-toast';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
@@ -23,7 +26,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import Loading from './loading';
-import { usersApi } from '@/lib/api';
+import { usersApi, cookiesApi, presenceApi, type UserPresence, type PresenceCounts } from '@/lib/api';
 import { AddUserDialog } from '@/components/admin/add-user-dialog';
 import { EditUserDialog } from '@/components/admin/edit-user-dialog';
 import { BanUserDialog } from '@/components/admin/ban-user-dialog';
@@ -31,7 +34,8 @@ import { UserPermissionsEditor } from '@/components/admin/user-permissions-edito
 import { UserPaymentsEditor } from '@/components/admin/user-payments-editor';
 import { DataPagination } from '@/components/admin/data-pagination';
 import { useDebounce } from '@/hooks/use-debounce';
-import { User, Payment } from '@/lib/types';
+import { User, Payment, Cookie } from '@/lib/types';
+import { describeCookieOption } from '@/lib/cookieLabels';
 import { paymentsApi } from '@/lib/api';
 
 const SWIFT_SOLUTIONS_LABEL = 'swiftSolutions';
@@ -39,6 +43,138 @@ const SWIFT_SOLUTIONS_LABEL = 'swiftSolutions';
 interface UserPaymentInfo {
   currentMonth?: Payment;
   previousMonth?: Payment;
+}
+
+function presenceAgo(value?: string | null) {
+  if (!value) return 'never';
+  const then = new Date(value).getTime();
+  if (Number.isNaN(then)) return 'never';
+  const secs = Math.max(0, Math.round((Date.now() - then) / 1000));
+  if (secs < 60) return `${secs}s ago`;
+  const mins = Math.round(secs / 60);
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.round(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  return `${Math.round(hrs / 24)}d ago`;
+}
+
+/** How often the live presence snapshot is polled. */
+const PRESENCE_POLL_MS = 3000;
+/** While a presence filter is on, the list itself is refetched this often so newcomers show up. */
+const PRESENCE_LIST_REFRESH_MS = 10000;
+
+const PRESENCE_FILTERS: { value: string; label: string }[] = [
+  { value: 'all', label: 'Any' },
+  { value: 'online', label: 'Online now' },
+  { value: 'dat', label: 'DAT open' },
+  { value: 'dat-visible', label: 'DAT on screen' },
+  { value: 'dat-tray', label: 'DAT in tray' },
+  { value: 'dashboard', label: 'On dashboard' },
+  { value: 'offline', label: 'Offline' },
+];
+
+function matchesPresence(p: UserPresence | null | undefined, filter: string) {
+  if (!filter || filter === 'all') return true;
+  const online = Boolean(p?.online) && p?.state !== 'offline';
+  if (filter === 'offline') return !online;
+  if (!online) return false;
+  if (filter === 'online') return true;
+  if (filter === 'dashboard') return p?.state === 'dashboard';
+  if (p?.state !== 'dat') return false;
+  if (filter === 'dat-visible') return Boolean(p?.datVisible);
+  if (filter === 'dat-tray') return !p?.datVisible;
+  return true;
+}
+
+function durationSince(value?: string | null) {
+  if (!value) return '';
+  const then = new Date(value).getTime();
+  if (Number.isNaN(then)) return '';
+  const mins = Math.max(0, Math.floor((Date.now() - then) / 60000));
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins}m`;
+  const hrs = Math.floor(mins / 60);
+  return `${hrs}h ${mins % 60}m`;
+}
+
+/** Remote actions the signed-in desktop app runs on its next check-in. */
+const REMOTE_ACTIONS: { type: string; label: string; confirm?: string }[] = [
+  { type: 'open-dat', label: 'Open DAT' },
+  {
+    type: 'close-dat',
+    label: 'Close DAT, show dashboard',
+    confirm: 'Close DAT and show the app dashboard?',
+  },
+  { type: 'hide-dat', label: 'Hide DAT in the tray' },
+  { type: 'reload-dat', label: 'Reload DAT' },
+  {
+    type: 'refresh-session',
+    label: 'Refresh DAT session',
+    confirm: 'Refresh the DAT session? DAT closes, its cache is wiped, and it reopens with a fresh session.',
+  },
+  {
+    type: 'clear-cache',
+    label: 'Clear DAT cache',
+    confirm: 'Clear the DAT cache? DAT will close, and the next open loads a fresh session.',
+  },
+  {
+    type: 'sign-out',
+    label: 'Sign out of the app',
+    confirm: 'Sign this person out of the desktop app? DAT closes and they must sign in again.',
+  },
+  {
+    type: 'restart-app',
+    label: 'Restart app',
+    confirm: 'Restart the desktop app? It closes and opens again on the dashboard.',
+  },
+  {
+    type: 'quit-app',
+    label: 'Quit app (leave tray)',
+    confirm: 'Quit the desktop app and remove it from the tray?',
+  },
+];
+
+/** Presence badge: offline / on dashboard / DAT on screen / DAT in tray, plus how long DAT has been open. */
+function PresenceBadge({ presence }: { presence?: UserPresence | null }) {
+  const p = presence;
+  if (!p || !p.online) {
+    return (
+      <div className="inline-flex flex-col gap-0.5" title="No desktop heartbeat in the last 90s">
+        <span className="inline-flex items-center gap-1.5">
+          <span className="w-2 h-2 rounded-full bg-muted-foreground/40" />
+          <span className="text-xs text-muted-foreground">Offline</span>
+        </span>
+        {p?.lastSeenAt ? (
+          <span className="text-[10px] text-muted-foreground">seen {presenceAgo(p.lastSeenAt)}</span>
+        ) : null}
+      </div>
+    );
+  }
+  if (p.state === 'dat') {
+    const openFor = durationSince(p.datOpenedAt);
+    return (
+      <div className="inline-flex flex-col gap-0.5" title={p.datVisible ? 'DAT is open on screen' : 'DAT is open but hidden in the tray'}>
+        <span className="inline-flex items-center gap-1.5">
+          <span className={`w-2 h-2 rounded-full ${p.datVisible ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`} />
+          <span className={`text-xs font-medium ${p.datVisible ? 'text-emerald-600' : 'text-amber-600'}`}>
+            {p.datVisible ? 'DAT on screen' : 'DAT in tray'}
+          </span>
+        </span>
+        <span className="text-[10px] text-muted-foreground">
+          {openFor ? `open ${openFor} · ` : ''}seen {presenceAgo(p.lastSeenAt)}
+        </span>
+      </div>
+    );
+  }
+  return (
+    <div className="inline-flex flex-col gap-0.5" title="Desktop app open on the dashboard">
+      <span className="inline-flex items-center gap-1.5">
+        <span className="w-2 h-2 rounded-full bg-sky-500" />
+        <span className="text-xs font-medium text-sky-600">On dashboard</span>
+      </span>
+      <span className="text-[10px] text-muted-foreground">seen {presenceAgo(p.lastSeenAt)}</span>
+    </div>
+  );
 }
 
 export default function UsersPage() {
@@ -58,6 +194,13 @@ export default function UsersPage() {
   const [expandedView, setExpandedView] = useState<'permissions' | 'payments'>('permissions');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'banned'>('all');
   const [labelFilter, setLabelFilter] = useState<string>('all');
+  const [presenceFilter, setPresenceFilter] = useState<string>('all');
+  // Live presence from the snapshot endpoint, merged over whatever the list returned.
+  const [livePresence, setLivePresence] = useState<Record<string, UserPresence> | null>(null);
+  const [liveCounts, setLiveCounts] = useState<PresenceCounts | null>(null);
+  const [liveAt, setLiveAt] = useState<number>(0);
+  const [liveOk, setLiveOk] = useState(true);
+  const [, setClock] = useState(0);
   const [availableLabels, setAvailableLabels] = useState<string[]>([]);
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
@@ -66,6 +209,9 @@ export default function UsersPage() {
   const [signalToggleLoading, setSignalToggleLoading] = useState<Set<string>>(new Set());
   const [sessionModeLoading, setSessionModeLoading] = useState<Set<string>>(new Set());
   const [signalSyncLoading, setSignalSyncLoading] = useState(false);
+  const [pushLoading, setPushLoading] = useState<Set<string>>(new Set());
+  /** Cookie id -> cookie, to show each user's pinned cookie */
+  const [cookieMap, setCookieMap] = useState<Map<string, Cookie>>(new Map());
   const searchParams = useSearchParams();
   const { toast } = useToast();
   const itemsPerPage = 10;
@@ -73,11 +219,273 @@ export default function UsersPage() {
 
   useEffect(() => {
     fetchAvailableLabels();
+    fetchCookieMap();
   }, []);
+
+  const fetchCookieMap = async () => {
+    try {
+      const data = await cookiesApi.getAll({ limit: 1000 });
+      setCookieMap(new Map((data.cookies || []).map((c: Cookie) => [c._id, c])));
+    } catch (error) {
+      console.error('Failed to fetch cookies:', error);
+    }
+  };
+
+  const assignedCookieOf = (user: User) => {
+    const value = user.assignedCookieId;
+    if (!value) return null;
+    const id = typeof value === 'string' ? value : value._id;
+    return { id, cookie: cookieMap.get(id) || null, fileName: typeof value === 'string' ? undefined : value.fileName };
+  };
+
+  const handlePushSession = async (user: User) => {
+    if (pushLoading.has(user._id)) return;
+    if (
+      !confirm(
+        `Push a session refresh to ${user.name} (${user.email})?\n\nTheir desktop will replace its local DAT profile with the current cookie the next time DAT opens.`
+      )
+    ) {
+      return;
+    }
+    setPushLoading((prev) => new Set(prev).add(user._id));
+    try {
+      const result = await cookiesApi.pushSession({ scope: 'user', userId: user._id });
+      const count = Number(result?.count || 0);
+      if (count > 0) {
+        sonnerToast.success(`Session refresh queued for ${user.name}`, { description: result?.message });
+      } else {
+        sonnerToast.info('No accounts matched', { description: result?.message });
+      }
+    } catch (err: any) {
+      sonnerToast.error('Push session refresh failed', {
+        description: err.response?.data?.message || err.message,
+      });
+    } finally {
+      setPushLoading((prev) => {
+        const next = new Set(prev);
+        next.delete(user._id);
+        return next;
+      });
+    }
+  };
+
+  // Remote cookie pull: queue a command, poll until done, download the resulting JSON.
+  const [pullState, setPullState] = useState<Record<string, { status: string; message: string }>>({});
+  const setPull = (userId: string, status: string, message: string) =>
+    setPullState((prev) => ({ ...prev, [userId]: { status, message } }));
+
+  const pullCookies = async (user: User) => {
+    setPull(user._id, 'pending', 'Requesting…');
+    try {
+      const { command, presence } = await presenceApi.pullCookies(user._id);
+      let cmd = command;
+      if (!presence?.online) {
+        setPull(user._id, 'queued', 'User is offline — the pull will run when they next come online (expires in ~10 min).');
+      }
+      const deadline = Date.now() + 90 * 1000;
+      while (cmd.status !== 'done' && cmd.status !== 'error' && cmd.status !== 'expired' && Date.now() < deadline) {
+        setPull(
+          user._id,
+          cmd.status,
+          cmd.status === 'running' ? 'Device is uploading…' : 'Waiting for the device…'
+        );
+        await new Promise((r) => setTimeout(r, 2500));
+        const res = await presenceApi.getCommand(cmd.id);
+        cmd = res.command;
+      }
+
+      if (cmd.status === 'done') {
+        const blob = await presenceApi.downloadCookies(cmd.id);
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `dat-cookies-${user.email.replace(/[^a-zA-Z0-9._-]/g, '_')}.json`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+        const savedNote = cmd.cookieId ? ' and saved as a Cookie doc' : '';
+        setPull(user._id, 'done', `Downloaded ${cmd.cookieCount || 0} cookies${savedNote}.`);
+        sonnerToast.success(`Pulled ${cmd.cookieCount || 0} cookies from ${user.name}`, {
+          description: cmd.cookieId ? 'Saved as a Cookie doc (source: device-pull) and downloaded.' : 'Downloaded.',
+        });
+      } else if (cmd.status === 'error') {
+        setPull(user._id, 'error', cmd.error || 'Pull failed');
+        sonnerToast.error('Cookie pull failed', { description: cmd.error || undefined });
+      } else if (cmd.status === 'expired') {
+        setPull(user._id, 'expired', 'The command expired before the device came online.');
+      } else {
+        setPull(user._id, 'queued', 'Queued — it will upload when the device comes online (expires in ~10 min).');
+      }
+    } catch (err: any) {
+      setPull(user._id, 'error', err.response?.data?.message || err.message || 'Pull failed');
+      sonnerToast.error('Cookie pull failed', {
+        description: err.response?.data?.message || err.message,
+      });
+    }
+  };
+
+  // Remote app actions: queue a command, then poll until the app says how it went.
+  const [remoteState, setRemoteState] = useState<Record<string, { status: string; message: string }>>({});
+  const setRemote = (userId: string, status: string, message: string) =>
+    setRemoteState((prev) => ({ ...prev, [userId]: { status, message } }));
+
+  const sendRemote = async (user: User, type: string) => {
+    const action = REMOTE_ACTIONS.find((item) => item.type === type);
+    if (!action) return;
+    if (action.confirm && !window.confirm(`${action.confirm} ${user.email}`)) return;
+    setRemote(user._id, 'pending', 'Sending…');
+    try {
+      const { command, reused } = await presenceApi.remote(user._id, type);
+      let cmd = command;
+      // The app checks in every 30 s, and Open DAT can take a minute after that.
+      const deadline = Date.now() + 3 * 60 * 1000;
+      let misses = 0;
+      while (cmd.status !== 'done' && cmd.status !== 'error' && cmd.status !== 'expired' && Date.now() < deadline) {
+        setRemote(
+          user._id,
+          cmd.status,
+          cmd.status === 'running'
+            ? 'App is doing it…'
+            : reused
+              ? 'Already waiting on this app…'
+              : 'Waiting for the app to check in…'
+        );
+        await new Promise((r) => setTimeout(r, 2500));
+        try {
+          const res = await presenceApi.getCommand(cmd.id);
+          cmd = res.command;
+          misses = 0;
+        } catch (pollErr) {
+          // One failed poll is not a failed action; give up only if the server stays away.
+          misses += 1;
+          if (misses >= 4) throw pollErr;
+        }
+      }
+      if (cmd.status === 'done') {
+        setRemote(user._id, 'done', `${action.label}: done`);
+      } else if (cmd.status === 'error') {
+        setRemote(user._id, 'error', cmd.error || 'The app could not do that');
+      } else if (cmd.status === 'expired') {
+        setRemote(user._id, 'error', 'The app never checked in. Is it running and signed in?');
+      } else {
+        setRemote(user._id, 'queued', 'Queued until the app checks in');
+      }
+    } catch (err: any) {
+      setRemote(
+        user._id,
+        'error',
+        err.response?.data?.message ||
+          (!err.response ? 'Could not reach the server. Check that the backend is running.' : err.message) ||
+          'Could not send that'
+      );
+    }
+  };
+
+  // Live presence: poll the small snapshot every few seconds (paused while the tab is hidden).
+  useEffect(() => {
+    let stopped = false;
+    let timer = 0;
+    const tick = async () => {
+      if (stopped) return;
+      if (document.visibilityState === 'visible') {
+        try {
+          const snap = await presenceApi.snapshot();
+          if (stopped) return;
+          setLivePresence(snap.users || {});
+          setLiveCounts(snap.counts || null);
+          setLiveAt(Date.now());
+          setLiveOk(true);
+        } catch {
+          if (!stopped) setLiveOk(false);
+        }
+      }
+      if (!stopped) timer = window.setTimeout(tick, PRESENCE_POLL_MS);
+    };
+    const onVisible = () => {
+      if (document.visibilityState !== 'visible') return;
+      window.clearTimeout(timer);
+      tick();
+    };
+    tick();
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      stopped = true;
+      window.clearTimeout(timer);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, []);
+
+  // Re-render every second so "seen Xs ago" and the live line stay current.
+  useEffect(() => {
+    const id = window.setInterval(() => setClock((n) => n + 1), 1000);
+    return () => window.clearInterval(id);
+  }, []);
+
+  const presenceOf = useCallback(
+    (user: User): UserPresence | null | undefined => {
+      if (!livePresence) return user.presence;
+      return (
+        livePresence[user._id] || {
+          state: 'offline',
+          online: false,
+          datOpen: false,
+          datVisible: false,
+          lastSeenAt: user.presence?.lastSeenAt || null,
+        }
+      );
+    },
+    [livePresence]
+  );
+
+  // The server filters by presence; this keeps the page right between list refreshes.
+  const visibleUsers = useMemo(
+    () => users.filter((user) => matchesPresence(presenceOf(user), presenceFilter)),
+    [users, presenceOf, presenceFilter]
+  );
 
   useEffect(() => {
     fetchUsers();
-  }, [currentPage, debouncedSearchTerm, statusFilter, labelFilter, dateFrom, dateTo]);
+  }, [currentPage, debouncedSearchTerm, statusFilter, labelFilter, dateFrom, dateTo, presenceFilter]);
+
+  // Silent presence refresh: keep the badges live (every 30s) without a spinner or
+  // disturbing open dialogs. Only the `presence` field is merged into existing rows.
+  useEffect(() => {
+    const id = window.setInterval(async () => {
+      if (addDialogOpen || editDialogOpen || banDialogOpen) return;
+      try {
+        const data = await usersApi.getAll({
+          page: currentPage,
+          limit: itemsPerPage,
+          search: debouncedSearchTerm,
+          status: statusFilter !== 'all' ? statusFilter : undefined,
+          label: labelFilter === 'all' ? undefined : labelFilter,
+          dateFrom: dateFrom || undefined,
+          dateTo: dateTo || undefined,
+          presence: presenceFilter !== 'all' ? presenceFilter : undefined,
+        });
+        if (presenceFilter !== 'all') {
+          // With a presence filter, who belongs on the page changes as people come and go.
+          setUsers((prev) => {
+            const old = new Map(prev.map((u) => [u._id, u]));
+            return (data.users || []).map((u: User) => (old.has(u._id) ? { ...old.get(u._id)!, presence: u.presence } : u));
+          });
+          setTotalPages(data.pagination?.totalPages || 1);
+          setTotalUsers(data.pagination?.totalUsers || 0);
+          return;
+        }
+        const byId = new Map<string, UserPresence | null | undefined>(
+          (data.users || []).map((u: User) => [u._id, u.presence])
+        );
+        setUsers((prev) =>
+          prev.map((u) => (byId.has(u._id) ? { ...u, presence: byId.get(u._id) } : u))
+        );
+      } catch {
+        // ignore transient errors; the next tick retries
+      }
+    }, presenceFilter !== 'all' ? PRESENCE_LIST_REFRESH_MS : 30000);
+    return () => window.clearInterval(id);
+  }, [currentPage, debouncedSearchTerm, statusFilter, labelFilter, dateFrom, dateTo, presenceFilter, addDialogOpen, editDialogOpen, banDialogOpen]);
 
   const fetchAvailableLabels = async () => {
     try {
@@ -99,7 +507,8 @@ export default function UsersPage() {
         status: statusFilter !== 'all' ? statusFilter : undefined,
         label: labelFilter === 'all' ? undefined : labelFilter,
         dateFrom: dateFrom || undefined,
-        dateTo: dateTo || undefined
+        dateTo: dateTo || undefined,
+        presence: presenceFilter !== 'all' ? presenceFilter : undefined,
       });
       const fetchedUsers = data.users || [];
       setUsers(fetchedUsers);
@@ -321,12 +730,24 @@ export default function UsersPage() {
   const clearFilters = () => {
     setStatusFilter('all');
     setLabelFilter('all');
+    setPresenceFilter('all');
     setDateFrom('');
     setDateTo('');
     setCurrentPage(1);
   };
 
-  const hasActiveFilters = statusFilter !== 'all' || labelFilter !== 'all' || dateFrom || dateTo;
+  const hasActiveFilters =
+    statusFilter !== 'all' || labelFilter !== 'all' || presenceFilter !== 'all' || dateFrom || dateTo;
+
+  const liveAge = liveAt ? Math.max(0, Math.round((Date.now() - liveAt) / 1000)) : null;
+  const liveChips: { value: string; label: string; count: number; dot: string }[] = liveCounts
+    ? [
+        { value: 'online', label: 'Online', count: liveCounts.online, dot: 'bg-emerald-500' },
+        { value: 'dat-visible', label: 'DAT on screen', count: liveCounts.datVisible, dot: 'bg-emerald-500' },
+        { value: 'dat-tray', label: 'DAT in tray', count: liveCounts.datTray, dot: 'bg-amber-500' },
+        { value: 'dashboard', label: 'On dashboard', count: liveCounts.dashboard, dot: 'bg-sky-500' },
+      ]
+    : [];
 
   const toggleRowExpansion = (userId: string) => {
     const newExpanded = new Set(expandedRows);
@@ -440,7 +861,41 @@ export default function UsersPage() {
 
         {/* Search and Filters */}
         <div className="px-8 py-4 bg-background border-b border-border">
-          <div className="grid grid-cols-6 gap-4 items-end">
+          <div className="mb-4 flex flex-wrap items-center gap-2">
+            <span className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground mr-1" role="status" aria-live="polite">
+              <span className={`w-2 h-2 rounded-full ${liveOk && liveAt ? 'bg-emerald-500 animate-pulse' : 'bg-red-500'}`} />
+              {!liveAt
+                ? 'Connecting to live presence…'
+                : liveOk
+                  ? `Live · updated ${liveAge}s ago`
+                  : 'Live presence paused: server unreachable, retrying…'}
+            </span>
+            {liveChips.map((chip) => {
+              const active = presenceFilter === chip.value;
+              return (
+                <button
+                  key={chip.value}
+                  type="button"
+                  aria-pressed={active}
+                  onClick={() => {
+                    setPresenceFilter(active ? 'all' : chip.value);
+                    setCurrentPage(1);
+                  }}
+                  className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
+                    active
+                      ? 'border-primary bg-primary text-primary-foreground'
+                      : 'border-border bg-card text-foreground hover:bg-muted'
+                  }`}
+                  title={active ? 'Show everyone' : `Show only: ${chip.label}`}
+                >
+                  <span className={`w-2 h-2 rounded-full ${chip.dot}`} />
+                  {chip.label}
+                  <span className="tabular-nums">{chip.count}</span>
+                </button>
+              );
+            })}
+          </div>
+          <div className="grid grid-cols-7 gap-4 items-end">
             {/* Search */}
             <div className="flex flex-col">
               <label className="text-sm font-medium text-foreground mb-1">Search</label>
@@ -494,6 +949,29 @@ export default function UsersPage() {
                         {label}
                       </SelectItem>
                     ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Presence Filter */}
+            <div className="flex flex-col">
+              <label className="text-sm font-medium text-foreground mb-1">Presence</label>
+              <Select
+                value={presenceFilter}
+                onValueChange={(value: string) => {
+                  setPresenceFilter(value);
+                  setCurrentPage(1);
+                }}
+              >
+                <SelectTrigger className="bg-card border-border">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {PRESENCE_FILTERS.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
@@ -562,6 +1040,9 @@ export default function UsersPage() {
                     <th className="px-6 py-3 text-left text-sm font-semibold text-muted-foreground">
                       Status
                     </th>
+                    <th className="px-6 py-3 text-left text-sm font-semibold text-muted-foreground" title="Live desktop presence (updates every ~30s)">
+                      Presence
+                    </th>
                     <th className="px-6 py-3 text-left text-sm font-semibold text-muted-foreground" title="Per-user extension proxy (server VPN)">
                       Ext. Proxy
                     </th>
@@ -573,6 +1054,9 @@ export default function UsersPage() {
                     </th>
                     <th className="px-6 py-3 text-left text-sm font-semibold text-muted-foreground" title="How desktop opens DAT">
                       Open Mode
+                    </th>
+                    <th className="px-6 py-3 text-left text-sm font-semibold text-muted-foreground" title="Cookie this user is pinned to (Auto = channel default)">
+                      Cookie
                     </th>
                     <th className="px-6 py-3 text-left text-sm font-semibold text-muted-foreground">
                       Monthly Amount
@@ -601,7 +1085,7 @@ export default function UsersPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {users.map((user) => (
+                  {visibleUsers.map((user) => (
                     <React.Fragment key={user._id}>
                       <tr
                         className="border-b border-border hover:bg-muted/30 transition-colors cursor-pointer"
@@ -643,6 +1127,36 @@ export default function UsersPage() {
                               </span>
                             )}
                           </div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <PresenceBadge presence={presenceOf(user)} />
+                          {remoteState[user._id] && (
+                            <div
+                              role="status"
+                              className={`mt-1 max-w-[180px] text-[10px] leading-tight ${
+                                remoteState[user._id].status === 'error'
+                                  ? 'text-red-500'
+                                  : remoteState[user._id].status === 'done'
+                                    ? 'text-emerald-600'
+                                    : 'text-muted-foreground'
+                              }`}
+                            >
+                              {remoteState[user._id].message}
+                            </div>
+                          )}
+                          {pullState[user._id] && (
+                            <div
+                              className={`mt-1 max-w-[180px] text-[10px] leading-tight ${
+                                pullState[user._id].status === 'error' || pullState[user._id].status === 'expired'
+                                  ? 'text-red-500'
+                                  : pullState[user._id].status === 'done'
+                                    ? 'text-emerald-600'
+                                    : 'text-muted-foreground'
+                              }`}
+                            >
+                              {pullState[user._id].message}
+                            </div>
+                          )}
                         </td>
                         <td
                           className="px-6 py-4"
@@ -698,6 +1212,25 @@ export default function UsersPage() {
                               <SelectItem value="cookie">Cookie</SelectItem>
                             </SelectContent>
                           </Select>
+                        </td>
+                        <td className="px-6 py-4">
+                          {(() => {
+                            const assigned = assignedCookieOf(user);
+                            if (!assigned) {
+                              return <span className="text-xs text-muted-foreground">Auto</span>;
+                            }
+                            const text = assigned.cookie
+                              ? describeCookieOption(assigned.cookie)
+                              : assigned.fileName || assigned.id;
+                            return (
+                              <span
+                                className="inline-block max-w-[180px] truncate rounded px-2 py-1 text-xs font-medium bg-sky-500/10 text-sky-700"
+                                title={text}
+                              >
+                                {assigned.cookie?.fileName || assigned.fileName || assigned.id}
+                              </span>
+                            );
+                          })()}
                         </td>
                         <td className="px-6 py-4">
                           {user.monthlyPaymentAmount && user.monthlyPaymentAmount > 0 ? (
@@ -810,7 +1343,7 @@ export default function UsersPage() {
                                   <MoreVertical size={18} className="text-muted-foreground" />
                                 </button>
                               </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end" className="w-48 bg-card border-border">
+                              <DropdownMenuContent align="end" className="w-56 bg-card border-border">
                                 <DropdownMenuItem
                                 onClick={() => handleEditUser(user)}
                                 className="cursor-pointer text-foreground hover:bg-muted"
@@ -818,6 +1351,49 @@ export default function UsersPage() {
                                 <Edit size={16} className="mr-2" />
                                 Edit User
                               </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={() => handlePushSession(user)}
+                              disabled={pushLoading.has(user._id)}
+                              className="cursor-pointer text-foreground hover:bg-muted"
+                            >
+                              <Send size={16} className="mr-2" />
+                              {pushLoading.has(user._id) ? 'Queuing…' : 'Push session refresh'}
+                            </DropdownMenuItem>
+                            {(() => {
+                              const pull = pullState[user._id];
+                              const pulling = !!pull && ['pending', 'running', 'queued'].includes(pull.status);
+                              return (
+                                <DropdownMenuItem
+                                  onClick={() => pullCookies(user)}
+                                  disabled={pulling}
+                                  className="cursor-pointer text-foreground hover:bg-muted"
+                                  title="Pull fresh DAT cookies from this user's device (runs when they are online; offline = queued, expires in ~10 min)"
+                                >
+                                  <Download size={16} className="mr-2" />
+                                  {pulling ? 'Pulling cookies…' : 'Pull cookies'}
+                                </DropdownMenuItem>
+                              );
+                            })()}
+                            <DropdownMenuSeparator />
+                            <DropdownMenuLabel className="text-xs text-muted-foreground">
+                              {presenceOf(user)?.online ? 'Desktop app' : 'Desktop app (offline: runs when it checks in)'}
+                            </DropdownMenuLabel>
+                            {REMOTE_ACTIONS.map((action) => {
+                              const busy =
+                                !!remoteState[user._id] && ['pending', 'running'].includes(remoteState[user._id].status);
+                              return (
+                                <DropdownMenuItem
+                                  key={action.type}
+                                  onClick={() => sendRemote(user, action.type)}
+                                  disabled={busy}
+                                  className="cursor-pointer text-foreground hover:bg-muted"
+                                >
+                                  <Monitor size={16} className="mr-2" />
+                                  {action.label}
+                                </DropdownMenuItem>
+                              );
+                            })}
+                            <DropdownMenuSeparator />
                             <DropdownMenuItem
                               onClick={() => handleBanUser(user)}
                               className="cursor-pointer text-foreground hover:bg-muted"
@@ -832,7 +1408,7 @@ export default function UsersPage() {
                       </tr>
                       {expandedRows.has(user._id) && (
                         <tr>
-                          <td colSpan={14} className="px-6 py-4">
+                          <td colSpan={17} className="px-6 py-4">
                             <div className="space-y-4">
                               {/* Tab Buttons */}
                               <div className="flex gap-2">
@@ -877,7 +1453,7 @@ export default function UsersPage() {
                 </tbody>
               </table>
 
-              {users.length === 0 && (
+              {visibleUsers.length === 0 && (
                 <div className="px-6 py-12 text-center">
                   <p className="text-muted-foreground">No users found matching your search</p>
                 </div>

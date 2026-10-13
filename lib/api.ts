@@ -1,5 +1,6 @@
 import axios from 'axios';
 import type { AssignableCookieLabel } from './cookieLabels';
+import type { FreightdeskChangeStatus, CookieDiff } from './types';
 
 export const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:7017';
 
@@ -47,7 +48,8 @@ export const authApi = {
 
 // Users API
 export const usersApi = {
-  getAll: async (params?: { page?: number; limit?: number; search?: string; status?: string; dateFrom?: string; dateTo?: string; label?: string }) => {
+  /** presence: online | dat | dat-visible | dat-tray | dashboard | offline */
+  getAll: async (params?: { page?: number; limit?: number; search?: string; status?: string; dateFrom?: string; dateTo?: string; label?: string; presence?: string }) => {
     const queryParams = new URLSearchParams();
     if (params?.page) queryParams.append('page', params.page.toString());
     if (params?.limit) queryParams.append('limit', params.limit.toString());
@@ -56,6 +58,7 @@ export const usersApi = {
     if (params?.dateFrom) queryParams.append('dateFrom', params.dateFrom.toString());
     if (params?.dateTo) queryParams.append('dateTo', params.dateTo.toString());
     if (params?.label) queryParams.append('label', params.label.toString());
+    if (params?.presence) queryParams.append('presence', params.presence.toString());
 
     const response = await api.get(`/user?${queryParams.toString()}`);
     return response.data;
@@ -386,7 +389,7 @@ export const cookiesApi = {
     // Legacy path for backends that only have per-id delete.
     // Sync first so orphan disk files (after another host wiped shared Mongo)
     // are re-registered, then remove each record+file on THIS host.
-    await api.post('/cookie/sync', undefined, reqTimeout);
+    await api.post('/cookie/sync-from-disk', undefined, reqTimeout);
 
     let deletedRecords = 0;
     let deletedFiles = 0;
@@ -422,7 +425,7 @@ export const cookiesApi = {
   },
 
   sync: async (baseURL?: string) => {
-    const response = await api.post('/cookie/sync', undefined, at(baseURL));
+    const response = await api.post('/cookie/sync-from-disk', undefined, at(baseURL));
     return response.data;
   },
 
@@ -440,6 +443,15 @@ export const cookiesApi = {
   ) => {
     const response = await api.post(`/cookie/${id}/deactivate`, { channel });
     return response.data;
+  },
+
+  /**
+   * Queue a DAT session refresh: matching desktops replace their local DAT
+   * profile with the current cookie the next time they open DAT.
+   */
+  pushSession: async (payload: PushSessionPayload) => {
+    const response = await api.post('/cookie/push', payload);
+    return response.data as { count: number; message: string };
   },
 
   getPartnerSwiftDashboardConfig: async () => {
@@ -745,6 +757,103 @@ export const salespersonCommissionApi = {
   },
 };
 
+export type SessionAlert = {
+  cookieId: string;
+  fileName: string;
+  deadUsers: number;
+  since: string;
+};
+
+export type LiveStatus = {
+  activeUsersByCookie: Record<string, number>;
+  alerts: SessionAlert[];
+  threshold: number;
+  windowMs: number;
+  at: string;
+};
+
+export type PresenceState = 'offline' | 'dashboard' | 'dat';
+
+/** Computed live-presence view the backend serves on each user (presenceController.presenceView). */
+export type UserPresence = {
+  state: PresenceState;
+  online: boolean;
+  datOpen: boolean;
+  datVisible: boolean;
+  lastSeenAt?: string | null;
+  datOpenedAt?: string | null;
+  appVersion?: string;
+  platform?: string;
+};
+
+export type DeviceCommand = {
+  id: string;
+  userId?: string | null;
+  type: string;
+  status: 'pending' | 'running' | 'done' | 'error' | 'expired';
+  cookieCount?: number;
+  cookieId?: string | null;
+  hasResult?: boolean;
+  error?: string;
+  requestedByEmail?: string;
+  expiresAt?: string | null;
+  deliveredAt?: string | null;
+  completedAt?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
+};
+
+export type PresenceCounts = {
+  online: number;
+  dat: number;
+  datVisible: number;
+  datTray: number;
+  dashboard: number;
+};
+
+export type PresenceSnapshot = {
+  /** Only online users are listed; anyone missing is offline. */
+  users: Record<string, UserPresence>;
+  counts: PresenceCounts;
+  onlineWindowMs: number;
+  at: string;
+};
+
+/**
+ * Presence + remote device commands (cookie-mode desktop). Ported from the Dat Desk reference.
+ * `live` is also polled by AlertsWatcher for session-death alerts.
+ */
+export const presenceApi = {
+  /** Who is online right now and where. Cheap, safe to poll every few seconds. */
+  snapshot: async () => {
+    const { data } = await api.get('/presence/admin/presence');
+    return data as PresenceSnapshot;
+  },
+  live: async (): Promise<LiveStatus> => {
+    const { data } = await api.get('/presence/admin/live');
+    return data as LiveStatus;
+  },
+  pullCookies: async (userId: string) => {
+    const { data } = await api.post(`/presence/admin/users/${userId}/pull-cookies`);
+    return data as { command: DeviceCommand; presence: UserPresence; reused: boolean };
+  },
+  /** Queue a remote app action (open-dat, close-dat, …); the app runs it on its next heartbeat. */
+  remote: async (userId: string, type: string) => {
+    const { data } = await api.post(`/presence/admin/users/${userId}/command`, { type });
+    return data as { command: DeviceCommand; presence: UserPresence; reused: boolean };
+  },
+  getCommand: async (commandId: string) => {
+    const { data } = await api.get(`/presence/admin/commands/${commandId}`);
+    return data as { command: DeviceCommand };
+  },
+  downloadCookies: async (commandId: string) => {
+    const res = await api.get(`/presence/admin/commands/${commandId}/download`, {
+      responseType: 'blob',
+    });
+    return res.data as Blob;
+  },
+};
+
 export const freightdeskApi = {
   getStatus: async () => {
     const response = await api.get('/freightdesk/status');
@@ -760,35 +869,112 @@ export const freightdeskApi = {
     container: string,
     options?: {
       activate?: boolean;
-      channel?: 'single' | 'double' | 'multi' | 'swiftSolutions' | 'test' | 'horizon' | 'dathub';
-      forceReimport?: boolean;
-      writeDisk?: boolean;
+      channel?: CookieChannel;
+      /** 'all' (default) keeps a newer Dat Desk-synced copy; 'force' always overwrites. */
+      mode?: FreightdeskImportMode;
     },
     baseURL?: string
   ) => {
     const response = await api.post(
       `/freightdesk/import/${encodeURIComponent(container)}`,
-      { forceReimport: true, writeDisk: false, ...options },
+      { mode: 'all', ...options },
       at(baseURL)
     );
-    return response.data;
+    return response.data as {
+      success?: boolean;
+      message?: string;
+      container: string;
+      imported: boolean;
+      activated?: boolean;
+      channel?: CookieChannel | null;
+      status?: FreightdeskChangeStatus;
+      reason?: string;
+      diff?: CookieDiff;
+    };
   },
 
+  /**
+   * Starts a background import-all job (202 + jobId) and polls
+   * GET /freightdesk/import-all/:jobId until it is done or failed.
+   * Resolves with the job's final result (containers / skippedContainers / errors).
+   */
   importAll: async (
     options?: {
       activate?: boolean;
-      channel?: 'single' | 'double' | 'multi' | 'swiftSolutions' | 'test' | 'horizon' | 'dathub';
-      forceReimport?: boolean;
-      writeDisk?: boolean;
+      channel?: CookieChannel;
+      mode?: FreightdeskImportMode;
     },
+    onProgress?: (info: FreightdeskImportProgressInfo) => void,
     baseURL?: string
-  ) => {
-    const response = await api.post(
-      '/freightdesk/import-all',
-      { forceReimport: true, writeDisk: false, ...options },
-      at(baseURL)
-    );
-    return response.data;
+  ): Promise<FreightdeskImportAllResult> => {
+    const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+    const formatProgress = (job: any) => {
+      if (job?.message) return String(job.message);
+      const p = job?.progress || {};
+      const total = p.total == null ? null : Number(p.total);
+      const done = Number(p.imported || 0) + Number(p.skipped || 0) + Number(p.failed || 0);
+      if (total != null) {
+        return `Importing ${done}/${total}${p.current ? ` · ${p.current}` : ''}…`;
+      }
+      return 'Importing…';
+    };
+
+    const pollJob = async (jobId: string): Promise<FreightdeskImportAllResult> => {
+      const deadline = Date.now() + 30 * 60 * 1000;
+      while (Date.now() < deadline) {
+        const { data: job } = await api.get(`/freightdesk/import-all/${encodeURIComponent(jobId)}`, {
+          ...at(baseURL),
+          timeout: 30000
+        });
+
+        onProgress?.({
+          message: formatProgress(job),
+          status: job?.status,
+          progress: job?.progress
+        });
+
+        if (job?.status === 'done') {
+          return {
+            success: true,
+            ...(job.result || {}),
+            message: job.message || job.result?.message || 'Import complete'
+          };
+        }
+
+        if (job?.status === 'error' || job?.status === 'failed') {
+          const msg = job.error || job.message || 'Import failed';
+          const err: any = new Error(msg);
+          err.response = { data: { message: msg } };
+          throw err;
+        }
+
+        await sleep(1500);
+      }
+      throw new Error('Import is still running on the server. Refresh in a minute.');
+    };
+
+    try {
+      const start = await api.post(
+        '/freightdesk/import-all',
+        { mode: 'all', ...options },
+        { ...at(baseURL), timeout: 60000 }
+      );
+      const startData = start.data as { jobId?: string; status?: string; message?: string };
+      if (startData?.jobId) {
+        onProgress?.({ message: startData.message || 'Import started…', status: startData.status || 'running' });
+        return pollJob(startData.jobId);
+      }
+      // Legacy synchronous response
+      return startData as FreightdeskImportAllResult;
+    } catch (err: any) {
+      const jobId = err?.response?.data?.jobId;
+      if (err?.response?.status === 409 && jobId) {
+        onProgress?.({ message: 'Import already running — joining…', status: 'running' });
+        return pollJob(jobId);
+      }
+      throw err;
+    }
   },
 
   activate: async (
@@ -803,6 +989,86 @@ export const freightdeskApi = {
     const response = await api.patch(`/freightdesk/label/${encodeURIComponent(container)}`, { label });
     return response.data;
   },
+
+  importSeparate: async (container: string) => {
+    const response = await api.post(`/freightdesk/import-separate/${encodeURIComponent(container)}`);
+    return response.data;
+  },
+
+  setWorking: async (container: string, isWorking: boolean) => {
+    const response = await api.patch(`/freightdesk/working/${encodeURIComponent(container)}`, {
+      isWorking
+    });
+    return response.data;
+  },
+
+  getImportAllJob: async (jobId: string) => {
+    const response = await api.get(`/freightdesk/import-all/${encodeURIComponent(jobId)}`);
+    return response.data;
+  },
 };
+
+export type {
+  FreightdeskContainerSession,
+  FreightdeskStatus,
+  FreightdeskChangeStatus,
+  CookieDiff
+} from './types';
+
+export type FreightdeskImportMode = 'changed' | 'all' | 'force';
+
+export type FreightdeskImportOutcome = {
+  container: string;
+  status?: FreightdeskChangeStatus;
+  reason?: string;
+  diff?: CookieDiff;
+  /** Set for containers that failed to import. */
+  error?: string;
+  cookieId?: string;
+  fileName?: string;
+};
+
+export type FreightdeskImportProgressInfo = {
+  message?: string;
+  status?: string;
+  progress?: {
+    imported?: number;
+    skipped?: number;
+    failed?: number;
+    total?: number | null;
+    current?: string | null;
+    phase?: string;
+  };
+};
+
+export type FreightdeskImportAllResult = {
+  success?: boolean;
+  message?: string;
+  mode?: FreightdeskImportMode;
+  imported?: number;
+  skipped?: number;
+  failed?: number;
+  total?: number;
+  containers?: FreightdeskImportOutcome[];
+  skippedContainers?: FreightdeskImportOutcome[];
+  errors?: { container: string; error: string }[];
+  activated?: boolean;
+  channel?: CookieChannel | null;
+};
+
+export type PushSessionScope = 'user' | 'all' | 'label' | 'plan' | 'cookie';
+
+export type PushSessionPayload = {
+  scope: PushSessionScope;
+  userId?: string;
+  label?: string;
+  plan?: 'single' | 'double' | 'multi';
+  cookieId?: string;
+};
+
+export type CookieChannel = 'single' | 'double' | 'multi' | 'horizon' | 'swiftSolutions' | 'test' | 'dathub';
+
+export { COOKIE_LABEL_OPTIONS } from './cookieLabels';
+export type { AssignableCookieLabel } from './cookieLabels';
 
 export default api;

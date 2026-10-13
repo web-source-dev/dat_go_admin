@@ -19,9 +19,19 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { usersApi, sessionsApi } from '@/lib/api';
+import { usersApi, sessionsApi, cookiesApi } from '@/lib/api';
 import { useToast } from '@/hooks/use-toast';
-import { User, DATSession } from '@/lib/types';
+import { User, DATSession, Cookie } from '@/lib/types';
+import { describeCookieOption } from '@/lib/cookieLabels';
+
+/** Select value meaning "no override — use the channel's active cookie". Sent as null. */
+const AUTO_COOKIE = 'auto';
+
+function assignedCookieIdOf(user: User | null): string {
+  const value = user?.assignedCookieId;
+  if (!value) return '';
+  return typeof value === 'string' ? value : value._id || '';
+}
 
 
 interface EditUserDialogProps {
@@ -36,6 +46,8 @@ export function EditUserDialog({ open, onClose, onSuccess, onRefresh, user }: Ed
   const [loading, setLoading] = useState(false);
   const [sessions, setSessions] = useState<DATSession[]>([]);
   const [sessionsLoading, setSessionsLoading] = useState(false);
+  const [cookies, setCookies] = useState<Cookie[]>([]);
+  const [cookiesLoading, setCookiesLoading] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -51,6 +63,8 @@ export function EditUserDialog({ open, onClose, onSuccess, onRefresh, user }: Ed
     isTrial: false,
     trialDurationHours: '1',
     signalEnabled: false,
+    /** '' = Auto (channel default) */
+    assignedCookieId: '',
   });
   const [availableLabels, setAvailableLabels] = useState<string[]>([]);
   const { toast } = useToast();
@@ -59,6 +73,7 @@ export function EditUserDialog({ open, onClose, onSuccess, onRefresh, user }: Ed
     if (open) {
       fetchSessions();
       fetchAvailableLabels();
+      fetchCookies();
     }
   }, [open]);
 
@@ -68,6 +83,18 @@ export function EditUserDialog({ open, onClose, onSuccess, onRefresh, user }: Ed
       setAvailableLabels(data.labels || []);
     } catch (error) {
       console.error('Failed to fetch available labels:', error);
+    }
+  };
+
+  const fetchCookies = async () => {
+    try {
+      setCookiesLoading(true);
+      const response = await cookiesApi.getAll({ limit: 1000 });
+      setCookies(response.cookies || []);
+    } catch (error) {
+      console.error('Failed to fetch cookies:', error);
+    } finally {
+      setCookiesLoading(false);
     }
   };
 
@@ -90,6 +117,7 @@ export function EditUserDialog({ open, onClose, onSuccess, onRefresh, user }: Ed
         isTrial: user.isTrial || false,
         trialDurationHours: user.trialDurationHours?.toString() || '1',
         signalEnabled: user.signalEnabled === true,
+        assignedCookieId: assignedCookieIdOf(user),
       });
     }
   }, [user]);
@@ -137,6 +165,8 @@ export function EditUserDialog({ open, onClose, onSuccess, onRefresh, user }: Ed
         isTrial: formData.isTrial,
         trialDurationHours: formData.isTrial ? parseFloat(formData.trialDurationHours) : undefined,
         signalEnabled: formData.signalEnabled,
+        // Never send '' (invalid ObjectId) — null means Auto (channel default)
+        assignedCookieId: formData.assignedCookieId || null,
       };
 
       // If session assignment changed, update permissions
@@ -158,6 +188,10 @@ export function EditUserDialog({ open, onClose, onSuccess, onRefresh, user }: Ed
         sessionOpenMode: (response as any).sessionOpenMode || user.sessionOpenMode || 'zip',
         phone: (response as any).phone ?? user.phone,
         note: (response as any).note ?? user.note,
+        assignedCookieId:
+          (response as any).assignedCookieId !== undefined
+            ? (response as any).assignedCookieId
+            : formData.assignedCookieId || null,
       };
 
       toast({
@@ -342,6 +376,39 @@ export function EditUserDialog({ open, onClose, onSuccess, onRefresh, user }: Ed
                 </Select>
                 <p className="text-xs text-muted-foreground">
                   ZIP uses the assigned session profile. Cookie uses the active cookie for this user&apos;s plan/label (single/double/multi, or test/swiftSolutions/horizon labels).
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="assignedCookieId">Assigned Cookie</Label>
+                <Select
+                  value={formData.assignedCookieId || AUTO_COOKIE}
+                  onValueChange={(value: string) =>
+                    setFormData({ ...formData, assignedCookieId: value === AUTO_COOKIE ? '' : value })
+                  }
+                  disabled={cookiesLoading}
+                >
+                  <SelectTrigger id="assignedCookieId">
+                    <SelectValue placeholder={cookiesLoading ? 'Loading cookies...' : 'Auto (channel default)'} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={AUTO_COOKIE}>Auto (channel default)</SelectItem>
+                    {cookies.map((cookie) => (
+                      <SelectItem key={cookie._id} value={cookie._id}>
+                        {describeCookieOption(cookie)}
+                      </SelectItem>
+                    ))}
+                    {formData.assignedCookieId &&
+                    !cookiesLoading &&
+                    !cookies.some((c) => c._id === formData.assignedCookieId) ? (
+                      <SelectItem value={formData.assignedCookieId}>
+                        Unknown cookie ({formData.assignedCookieId})
+                      </SelectItem>
+                    ) : null}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  Pin this user to a specific cookie. Auto uses the active cookie for the user&apos;s plan/label channel.
                 </p>
               </div>
 

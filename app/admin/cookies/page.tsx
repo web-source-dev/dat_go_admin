@@ -3,7 +3,7 @@
 import { useSearchParams } from "next/navigation"
 import Loading from './loading';
 import { useEffect, useRef, useState } from 'react';
-import { Search, Plus, MoreVertical, AlertCircle, Trash2, RefreshCw, X, FileText, Download, CheckCircle2, Circle } from 'lucide-react';
+import { Search, Plus, MoreVertical, AlertCircle, Trash2, RefreshCw, X, FileText, Download, CheckCircle2, Circle, Send } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -14,6 +14,14 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -22,16 +30,59 @@ import {
 } from '@/components/ui/select';
 import { Suspense } from 'react';
 import { toast } from 'sonner';
-import { cookiesApi, getSharedDbBackend } from '@/lib/api';
+import { cookiesApi, usersApi, getSharedDbBackend, type PushSessionPayload } from '@/lib/api';
+import { maskProxy, truncateText } from '@/lib/utils';
 import { DataPagination } from '@/components/admin/data-pagination';
 import { useDebounce } from '@/hooks/use-debounce';
 import { AddCookieDialog } from '@/components/admin/add-cookie-dialog';
 import { EditCookieDialog } from '@/components/admin/edit-cookie-dialog';
 import { GetHalvexCookieDialog } from '@/components/admin/get-halvex-cookie-dialog';
-import { Cookie } from '@/lib/types';
+import { Cookie, User } from '@/lib/types';
 import { COOKIE_LABEL_OPTIONS, CookieLabel, isAssignableCookieLabel } from '@/lib/cookieLabels';
 
 type LabelFilter = 'all' | CookieLabel;
+
+/** A cookie is FreightDesk-sourced when it came from an FD container import (mirrors the backend helper). */
+function isFreightdeskCookie(cookie: Cookie): boolean {
+  const source = String(cookie.source || '');
+  if (source.startsWith('freightdesk')) return true;
+  if (String(cookie.fileName || '').startsWith('fd-container-')) return true;
+  return false;
+}
+
+/** Source badge: FreightDesk / Device pull / Uploaded (for manual/legacy uploads). */
+function CookieSourceBadge({ cookie }: { cookie: Cookie }) {
+  if (isFreightdeskCookie(cookie)) {
+    return (
+      <span
+        className="inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide bg-indigo-500/15 text-indigo-700 dark:text-indigo-400 border border-indigo-500/30"
+        title="Imported from a FreightDesk container — uses the container's bound proxy"
+      >
+        FreightDesk
+      </span>
+    );
+  }
+  if (String(cookie.source || '') === 'device-pull') {
+    return (
+      <span
+        className="inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide bg-teal-500/15 text-teal-700 dark:text-teal-400 border border-teal-500/30"
+        title="Pulled live from a user's device"
+      >
+        Device pull
+      </span>
+    );
+  }
+  return (
+    <span
+      className="inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide bg-slate-500/15 text-slate-700 dark:text-slate-300 border border-slate-500/30"
+      title="Uploaded/manual cookie — opens DAT with the user's session proxy"
+    >
+      Uploaded
+    </span>
+  );
+}
+type PushScope = 'all' | 'plan' | 'label' | 'user';
+type PushPlan = 'single' | 'double' | 'multi';
 
 export default function CookiesPage() {
   const [cookies, setCookies] = useState<Cookie[]>([]);
@@ -53,6 +104,18 @@ export default function CookiesPage() {
   const searchParams = useSearchParams();
   const itemsPerPage = 10;
   const debouncedSearchTerm = useDebounce(searchTerm, 500);
+
+  // Push session refresh (toolbar dialog + per-cookie action)
+  const [pushDialogOpen, setPushDialogOpen] = useState(false);
+  const [pushScope, setPushScope] = useState<PushScope>('plan');
+  const [pushPlan, setPushPlan] = useState<PushPlan>('single');
+  const [pushLabel, setPushLabel] = useState('');
+  const [pushUserQuery, setPushUserQuery] = useState('');
+  const [pushUserHits, setPushUserHits] = useState<User[]>([]);
+  const [pushUserId, setPushUserId] = useState('');
+  const [pushUserSearching, setPushUserSearching] = useState(false);
+  const [userLabels, setUserLabels] = useState<string[]>([]);
+  const [pushing, setPushing] = useState(false);
 
   useEffect(() => {
     fetchCookies();
@@ -316,6 +379,115 @@ export default function CookiesPage() {
     }
   };
 
+  const openPushDialog = async () => {
+    setPushDialogOpen(true);
+    if (!userLabels.length) {
+      try {
+        const data = await usersApi.getAvailableLabels();
+        setUserLabels(data.labels || []);
+      } catch {
+        // label list is optional; the input still accepts free text
+      }
+    }
+  };
+
+  const searchPushUsers = async () => {
+    const q = pushUserQuery.trim();
+    if (!q) return;
+    setPushUserSearching(true);
+    try {
+      const data = await usersApi.getAll({ search: q, limit: 20 });
+      const hits: User[] = data.users || [];
+      setPushUserHits(hits);
+      setPushUserId(hits.length === 1 ? hits[0]._id : '');
+      if (!hits.length) toast.info('No users matched that search.');
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || err.message || 'User search failed');
+    } finally {
+      setPushUserSearching(false);
+    }
+  };
+
+  /** Describe a push target for the confirm prompt. */
+  const describePush = (payload: PushSessionPayload) => {
+    switch (payload.scope) {
+      case 'all':
+        return 'EVERY user account';
+      case 'plan':
+        return `all ${payload.plan} plan users`;
+      case 'label':
+        return payload.label === 'none' ? 'all users without a label' : `all users labelled "${payload.label}"`;
+      case 'user': {
+        const u = pushUserHits.find((x) => x._id === payload.userId);
+        return u ? `${u.name} (${u.email})` : 'the selected user';
+      }
+      case 'cookie':
+        return 'all users currently on this cookie';
+      default:
+        return 'the selected users';
+    }
+  };
+
+  const sendPushSession = async (payload: PushSessionPayload, confirmText: string) => {
+    if (pushing) return false;
+    if (!confirm(confirmText)) return false;
+    setPushing(true);
+    try {
+      const result = await cookiesApi.pushSession(payload);
+      const count = Number(result?.count || 0);
+      if (count > 0) {
+        toast.success(`Session refresh queued for ${count} account${count === 1 ? '' : 's'}`, {
+          description: result?.message,
+        });
+      } else {
+        toast.info('No accounts matched', { description: result?.message });
+      }
+      return true;
+    } catch (err: any) {
+      toast.error('Push session refresh failed', {
+        description: err.response?.data?.message || err.message,
+      });
+      return false;
+    } finally {
+      setPushing(false);
+    }
+  };
+
+  const handlePushFromDialog = async () => {
+    let payload: PushSessionPayload;
+    if (pushScope === 'all') {
+      payload = { scope: 'all' };
+    } else if (pushScope === 'plan') {
+      payload = { scope: 'plan', plan: pushPlan };
+    } else if (pushScope === 'label') {
+      const label = pushLabel.trim();
+      if (!label) {
+        toast.error('Choose a label first');
+        return;
+      }
+      payload = { scope: 'label', label };
+    } else {
+      if (!pushUserId) {
+        toast.error('Search for and select a user first');
+        return;
+      }
+      payload = { scope: 'user', userId: pushUserId };
+    }
+
+    const confirmText =
+      payload.scope === 'all'
+        ? 'WARNING: push a session refresh to EVERY user account?\n\nEvery desktop will discard its local DAT profile and reload the current cookie the next time DAT opens. Anyone mid-session will be signed back in from the server copy.\n\nThis affects ALL users. Continue?'
+        : `Push a session refresh to ${describePush(payload)}?\n\nTheir desktop will replace its local DAT profile with the current cookie the next time DAT opens.`;
+    const sent = await sendPushSession(payload, confirmText);
+    if (sent) setPushDialogOpen(false);
+  };
+
+  const handlePushForCookie = (cookie: Cookie) =>
+    sendPushSession(
+      { scope: 'cookie', cookieId: cookie._id },
+      `Push a session refresh to all users on "${cookie.fileName}"?\n\nTheir desktop will replace its local DAT profile with this cookie the next time DAT opens.`
+    );
+
   const formatFileSize = (bytes: number) => {
     if (bytes === 0) return '0 B';
     const k = 1024;
@@ -370,6 +542,15 @@ export default function CookiesPage() {
               >
                 <Download size={18} className="mr-2" />
                 Get Halvex cookies
+              </Button>
+              <Button
+                variant="outline"
+                onClick={openPushDialog}
+                disabled={pushing || deletingAll}
+                title="Make desktops reload the current DAT session the next time they open DAT"
+              >
+                <Send size={18} className="mr-2" />
+                Push session refresh
               </Button>
               <Button
                 variant="outline"
@@ -492,6 +673,12 @@ export default function CookiesPage() {
                     <th className="px-6 py-3 text-left text-sm font-semibold text-muted-foreground">
                       Last Updated
                     </th>
+                    <th
+                      className="px-6 py-3 text-left text-sm font-semibold text-muted-foreground"
+                      title="Bound proxy / user agent, DAT login expiry, last Dat Desk sync"
+                    >
+                      Browser / Login
+                    </th>
                     <th className="px-6 py-3 text-left text-sm font-semibold text-muted-foreground">
                       Working
                     </th>
@@ -528,6 +715,7 @@ export default function CookiesPage() {
                         <div className="flex items-center gap-2 flex-wrap">
                           <FileText size={16} className="text-muted-foreground shrink-0" />
                           <span className="break-all">{cookie.fileName}</span>
+                          <CookieSourceBadge cookie={cookie} />
                           {cookie.isManualUpload && (
                             <span
                               className="inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide bg-amber-500/15 text-amber-700 dark:text-amber-400 border border-amber-500/30"
@@ -576,6 +764,50 @@ export default function CookiesPage() {
                       </td>
                       <td className="px-6 py-4 text-sm text-muted-foreground">
                         {cookie.lastUpdated ? formatDate(cookie.lastUpdated) : '-'}
+                      </td>
+                      <td className="px-6 py-4 text-xs text-muted-foreground align-top">
+                        <div className="space-y-0.5 max-w-[240px]">
+                          <div className="truncate" title={cookie.proxy ? maskProxy(cookie.proxy) : undefined}>
+                            <span className="text-muted-foreground/70">Proxy:</span>{' '}
+                            <span className="font-mono text-foreground">
+                              {cookie.proxy
+                                ? maskProxy(cookie.proxy)
+                                : isFreightdeskCookie(cookie)
+                                  ? 'container (by name)'
+                                  : 'uses session proxy'}
+                            </span>
+                          </div>
+                          <div className="text-[10px] text-muted-foreground/70">
+                            {isFreightdeskCookie(cookie)
+                              ? 'FreightDesk → container proxy (authoritative)'
+                              : 'Custom upload → per-user session proxy'}
+                          </div>
+                          <div className="truncate" title={cookie.userAgent || undefined}>
+                            <span className="text-muted-foreground/70">UA:</span>{' '}
+                            <span className="font-mono text-foreground">
+                              {cookie.userAgent ? truncateText(cookie.userAgent, 32) : '—'}
+                            </span>
+                          </div>
+                          <div>
+                            <span className="text-muted-foreground/70">Login until:</span>{' '}
+                            <span
+                              className={
+                                cookie.authExpiresAt && new Date(cookie.authExpiresAt).getTime() < Date.now()
+                                  ? 'text-destructive font-medium'
+                                  : 'text-foreground'
+                              }
+                            >
+                              {cookie.authExpiresAt ? formatDate(cookie.authExpiresAt) : '—'}
+                            </span>
+                          </div>
+                          <div className="truncate" title={cookie.syncedBy || undefined}>
+                            <span className="text-muted-foreground/70">Synced:</span>{' '}
+                            <span className="text-foreground">
+                              {cookie.syncedAt ? formatDate(cookie.syncedAt) : '—'}
+                            </span>
+                            {cookie.syncedBy ? <span> · {cookie.syncedBy}</span> : null}
+                          </div>
+                        </div>
                       </td>
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-2">
@@ -756,6 +988,14 @@ export default function CookiesPage() {
                                 {cookie.isWorking ? 'Mark as Not working' : 'Mark as Working'}
                               </DropdownMenuItem>
                               <DropdownMenuItem
+                                onClick={() => handlePushForCookie(cookie)}
+                                disabled={pushing}
+                                className="cursor-pointer text-foreground hover:bg-muted"
+                              >
+                                <Send size={16} className="mr-2" />
+                                Push session refresh to its users
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
                                 onClick={() => handleEditCookie(cookie)}
                                 className="cursor-pointer text-foreground hover:bg-muted"
                               >
@@ -807,6 +1047,133 @@ export default function CookiesPage() {
           open={halvexDialogOpen}
           onClose={() => setHalvexDialogOpen(false)}
         />
+
+        <Dialog open={pushDialogOpen} onOpenChange={(open) => !pushing && setPushDialogOpen(open)}>
+          <DialogContent className="sm:max-w-[520px]">
+            <DialogHeader>
+              <DialogTitle>Push session refresh</DialogTitle>
+              <DialogDescription>
+                Matching desktops replace their local DAT profile with the current cookie the next time they open DAT.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-4">
+              <div className="flex flex-col">
+                <label className="text-sm font-medium text-foreground mb-1">Who</label>
+                <Select value={pushScope} onValueChange={(value: PushScope) => setPushScope(value)}>
+                  <SelectTrigger className="bg-card border-border">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="plan">Users on a plan</SelectItem>
+                    <SelectItem value="label">Users with a label</SelectItem>
+                    <SelectItem value="user">A single user</SelectItem>
+                    <SelectItem value="all">All users</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {pushScope === 'plan' && (
+                <div className="flex flex-col">
+                  <label className="text-sm font-medium text-foreground mb-1">Plan</label>
+                  <Select value={pushPlan} onValueChange={(value: PushPlan) => setPushPlan(value)}>
+                    <SelectTrigger className="bg-card border-border">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="single">Single</SelectItem>
+                      <SelectItem value="double">Double</SelectItem>
+                      <SelectItem value="multi">Multi</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+
+              {pushScope === 'label' && (
+                <div className="flex flex-col">
+                  <label className="text-sm font-medium text-foreground mb-1">User label</label>
+                  <Input
+                    value={pushLabel}
+                    onChange={(e) => setPushLabel(e.target.value)}
+                    placeholder="e.g. test, horizon, swiftSolutions, none"
+                    list="push-user-labels"
+                  />
+                  <datalist id="push-user-labels">
+                    <option value="none" />
+                    {userLabels.map((label) => (
+                      <option key={label} value={label} />
+                    ))}
+                  </datalist>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Use <code>none</code> for users without a label.
+                  </p>
+                </div>
+              )}
+
+              {pushScope === 'user' && (
+                <div className="flex flex-col gap-2">
+                  <label className="text-sm font-medium text-foreground">User</label>
+                  <div className="flex gap-2">
+                    <Input
+                      value={pushUserQuery}
+                      onChange={(e) => setPushUserQuery(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          searchPushUsers();
+                        }
+                      }}
+                      placeholder="Search name or email"
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={searchPushUsers}
+                      disabled={pushUserSearching || !pushUserQuery.trim()}
+                    >
+                      {pushUserSearching ? 'Searching…' : 'Search'}
+                    </Button>
+                  </div>
+                  {pushUserHits.length > 0 && (
+                    <Select value={pushUserId} onValueChange={setPushUserId}>
+                      <SelectTrigger className="bg-card border-border">
+                        <SelectValue placeholder="Select a user" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {pushUserHits.map((u) => (
+                          <SelectItem key={u._id} value={u._id}>
+                            {u.name} ({u.email})
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                </div>
+              )}
+
+              {pushScope === 'all' && (
+                <div className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                  This refreshes the DAT session for every user account. You will be asked to confirm.
+                </div>
+              )}
+            </div>
+
+            <DialogFooter className="mt-2">
+              <Button type="button" variant="outline" onClick={() => setPushDialogOpen(false)} disabled={pushing}>
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                variant={pushScope === 'all' ? 'destructive' : 'default'}
+                onClick={handlePushFromDialog}
+                disabled={pushing}
+              >
+                <Send size={16} className="mr-2" />
+                {pushing ? 'Queuing…' : 'Push refresh'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
         <EditCookieDialog
           open={editDialogOpen}

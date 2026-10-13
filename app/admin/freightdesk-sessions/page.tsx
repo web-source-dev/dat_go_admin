@@ -109,7 +109,7 @@ export default function FreightdeskSessionsPage() {
       await callSharedDbBackend(`Re-import ${container}`, (baseURL) =>
         freightdeskApi.importContainer(
           container,
-          { activate, channel, forceReimport: true, writeDisk: false },
+          { activate, channel, mode: 'all' },
           baseURL
         )
       );
@@ -128,7 +128,7 @@ export default function FreightdeskSessionsPage() {
       await callSharedDbBackend(`Activate ${container}`, (baseURL) =>
         freightdeskApi.importContainer(
           container,
-          { activate: true, channel, forceReimport: true, writeDisk: false },
+          { activate: true, channel, mode: 'all' },
           baseURL
         )
       );
@@ -158,11 +158,21 @@ export default function FreightdeskSessionsPage() {
   };
 
   const handleImportAll = async (activate = false) => {
+    if (
+      activate &&
+      !window.confirm(
+        `Import all containers and ACTIVATE the last imported one for the "${channel}" channel?\n\n` +
+          'This replaces the cookie currently active for that channel.'
+      )
+    ) {
+      return;
+    }
     setWorking('import-all');
     try {
       await callSharedDbBackend('Re-import all containers', (baseURL) =>
         freightdeskApi.importAll(
-          { activate, channel, forceReimport: true, writeDisk: false },
+          { activate, channel, mode: 'all' },
+          undefined,
           baseURL
         )
       );

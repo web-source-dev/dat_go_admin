@@ -7,6 +7,8 @@ import { usePathname } from 'next/navigation';
 import { Users, Lock, Settings, LogOut, Cookie, MessageSquare, Clock, Users as UsersIcon, LayoutGrid, Boxes, Download, Globe, Puzzle, Shield } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
 import { Toaster } from '@/components/ui/sonner';
+import { Toaster as LegacyToaster } from '@/components/ui/toaster';
+import AlertsWatcher from '@/components/AlertsWatcher';
 
 const navigation = [
   { name: 'Users', href: '/admin/users', icon: Users },
@@ -15,7 +17,7 @@ const navigation = [
   { name: 'Foxy Proxy', href: '/admin/foxy-proxy', icon: Shield },
   { name: 'Extensions', href: '/admin/extensions', icon: Puzzle },
   { name: 'Cookies', href: '/admin/cookies', icon: Cookie },
-  { name: 'FD Containers', href: '/admin/freightdesk-sessions', icon: Boxes },
+  { name: 'FD Containers', href: '/admin/freightdesk', icon: Boxes },
   { name: 'Swift Partner', href: '/admin/swift-partner-accounts', icon: LayoutGrid },
   { name: 'Messages', href: '/admin/messages', icon: MessageSquare },
   { name: 'Salesperson', href: '/admin/salesperson-commission', icon: Users },
@@ -114,9 +116,13 @@ export default function AdminLayout({
 
       {/* Main Content */}
       <main className="flex-1 overflow-auto">
+        <AlertsWatcher />
         {children}
       </main>
+      {/* sonner Toaster (pages using `toast` from 'sonner') + the shadcn useToast Toaster
+          (pages/dialogs using useToast) — both are mounted so every toast renders. */}
       <Toaster />
+      <LegacyToaster />
     </div>
   );
 }

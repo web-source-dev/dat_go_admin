@@ -60,6 +60,13 @@ export interface User {
   trialEndDate?: string;
   trialDurationHours?: number;
   signalEnabled?: boolean;
+  /**
+   * Per-user cookie override (wins over the plan/label channel cookie).
+   * null = automatic (channel default). May arrive populated from the API.
+   */
+  assignedCookieId?: string | { _id: string; fileName?: string; sessionName?: string; label?: string } | null;
+  /** Live desktop presence (online/dashboard/DAT incl. tray + last seen). */
+  presence?: import('./api').UserPresence | null;
 }
 
 export interface DATSession {
@@ -158,9 +165,32 @@ export interface Cookie {
   isActiveHorizon?: boolean;
   /** Quick ops flag: known working cookie */
   isWorking?: boolean;
+  /** Browser identity bound to this DAT login */
+  userAgent?: string;
+  proxy?: string;
+  fingerprint?: Record<string, unknown> | null;
+  /** When the DAT login token in this cookie expires */
+  authExpiresAt?: string | null;
+  /** Last renewal pushed back from a running Dat Desk */
+  syncedAt?: string | null;
+  syncedBy?: string;
+  accountName?: string;
+  accountEmail?: string;
+  /** Where the cookie came from: 'freightdesk' | 'freightdesk-copy' | 'device-pull' | 'manual' | legacy. */
+  source?: string;
   createdAt: string;
   updatedAt: string;
 }
+
+export type FreightdeskChangeStatus = 'new' | 'unchanged' | 'changed' | 'reimported' | 'kept-newer';
+
+export type CookieDiff = {
+  added: string[];
+  removed: string[];
+  changed: string[];
+  renewed: string[];
+  total: number;
+};
 
 export interface FreightdeskContainerSession {
   container: string;
@@ -181,6 +211,37 @@ export interface FreightdeskContainerSession {
   isActiveHorizon?: boolean;
   isWorking?: boolean;
   isActive?: boolean;
+  changeStatus?: FreightdeskChangeStatus | null;
+  changeReason?: string | null;
+  diff?: CookieDiff | null;
+  /** DAT account this container logs into */
+  accountId?: string | null;
+  accountShortId?: string | null;
+  accountEmail?: string | null;
+  accountName?: string | null;
+  accountPlan?: string | null;
+  accountSource?: string | null;
+  /** FreightDesk now holds a different account than the stored copy */
+  accountChanged?: boolean;
+  /** Other containers logged into the same DAT account / exported from the same browser */
+  sameAccountAs?: string[];
+  sameBrowserAs?: string[];
+  remoteAccountId?: string | null;
+  remoteAccountShortId?: string | null;
+  remoteAccountEmail?: string | null;
+  remoteAccountName?: string | null;
+  dbAccountId?: string | null;
+  dbAccountShortId?: string | null;
+  dbAccountEmail?: string | null;
+  dbAccountName?: string | null;
+  fdImportedAt?: string | null;
+  /** Bound browser identity of the stored cookie */
+  proxy?: string;
+  userAgent?: string;
+  authExpiresAt?: string | null;
+  /** Last renewal pushed back from a running Dat Desk */
+  syncedAt?: string | null;
+  syncedBy?: string | null;
 }
 
 export interface FreightdeskStatus {

@@ -27,3 +27,41 @@ export function getCookieLabelDisplay(label?: string | null): string {
 export function isAssignableCookieLabel(label: string): label is AssignableCookieLabel {
   return COOKIE_LABEL_OPTIONS.some((opt) => opt.value === label);
 }
+
+type CookieOptionSource = {
+  fileName: string;
+  sessionName?: string | null;
+  accountName?: string | null;
+  label?: string | null;
+  isActiveSingle?: boolean;
+  isActiveDouble?: boolean;
+  isActiveMulti?: boolean;
+  isActiveSwiftSolutions?: boolean;
+  isActiveTest?: boolean;
+  isActiveHorizon?: boolean;
+};
+
+/** Channels a cookie is currently active for, e.g. "Single, Horizon". */
+export function activeCookieChannels(cookie: CookieOptionSource): string[] {
+  const channels: string[] = [];
+  if (cookie.isActiveSingle) channels.push('Single');
+  if (cookie.isActiveDouble) channels.push('Double');
+  if (cookie.isActiveMulti) channels.push('Multi');
+  if (cookie.isActiveSwiftSolutions) channels.push('Swift');
+  if (cookie.isActiveTest) channels.push('Test');
+  if (cookie.isActiveHorizon) channels.push('Horizon');
+  return channels;
+}
+
+/** "fd-container-A1 (John Doe) · Single · active: Single" — for cookie pickers. */
+export function describeCookieOption(cookie: CookieOptionSource): string {
+  const name = cookie.accountName || cookie.sessionName;
+  const channels = activeCookieChannels(cookie);
+  return [
+    `${cookie.fileName}${name ? ` (${name})` : ''}`,
+    getCookieLabelDisplay(cookie.label),
+    channels.length ? `active: ${channels.join(', ')}` : null,
+  ]
+    .filter(Boolean)
+    .join(' · ');
+}
